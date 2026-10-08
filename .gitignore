@@ -36,3 +36,6 @@ htmlcov/
 # Generated output
 edit_out/
 render_out/
+
+# Generated / large media (never commit binaries to history)
+lyric_video/project/
