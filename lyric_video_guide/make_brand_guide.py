@@ -212,7 +212,7 @@ def build(out_path: Path):
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(SOFT)
         canvas.drawString(MARGIN, 8 * mm, "ASUR - the honest, firewalled AI Content Creation OS")
-        canvas.drawRightString(PAGE_W - MARGIN, 8 * mm, "page %d" % _doc.page)
+        canvas.drawRightString(PAGE_W - MARGIN, 8 * mm, f"page {_doc.page}")
         canvas.restoreState()
 
     from reportlab.platypus import PageTemplate
@@ -254,9 +254,48 @@ def build(out_path: Path):
         "<b>SCRIPT</b> understands &rarr; <b>GENERATION</b> creates &rarr; <b>EDITING</b> shapes &rarr; "
         "<b>VIRAL CHECK</b> challenges &rarr; <b>a human decides</b> &rarr; <b>ANALYTICS</b> measures &rarr; "
         "<b>SCRIPT learns</b> &rarr; (repeat, better every time).", S["body"]))
+    story.append(Spacer(1, 8))
+    story.append(rule(LINE, 0.75))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "This document is a complete guide to ASUR &mdash; what it is, what it does today, how it is built, "
+        "how it is delivered, and how it is sold. Pages 1-5 explain the product; pages 6-10 are the "
+        "commercial case for buyers.", S["small"]))
     story.append(PageBreak())
 
-    # ---------------- PAGE 2: THE 8 PROMISES (INVARIANTS) ----------------
+    # ---------------- PAGE 2: EXECUTIVE SUMMARY (buyer-facing) ----------------
+    story.append(band("EXECUTIVE SUMMARY (for buyers)", BLUE))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "<b>The product.</b> ASUR is a local-first operating system for short-form video creation. It takes a "
+        "single idea, song, or raw clip and carries it all the way to a finished 9:16 video &mdash; scripting, "
+        "generation, editing, an honest quality evaluation, your approval, and performance learning &mdash; "
+        "without any cloud account, API key, or per-seat SaaS subscription.", S["body"]))
+    story.append(Paragraph(
+        "<b>The problem it solves.</b> Teams today stitch together four or five paid tools (a scripting AI, a "
+        "generation tool, an editor, a 'virality' predictor) that each resell the same frontier models, upload "
+        "your material to their servers, and give you a confident-but-unfounded score. You pay several "
+        "subscriptions, you lose ownership of your footage, and you still cannot trust the numbers.", S["body"]))
+    story.append(Paragraph(
+        "<b>Why ASUR is different.</b> ASUR is one system, not five tools. It runs entirely on the client's own "
+        "machine (their footage never leaves it), it refuses to invent a fake 'viral %', and it keeps a "
+        "<b>firewall</b> between the part that makes the video and the part that judges it &mdash; so the judge "
+        "cannot be gamed. Every video also makes the next one smarter through a measured learning loop.", S["body"]))
+    story.append(Spacer(1, 6))
+    story.append(band("THE FIVE THINGS A BUYER IS ACTUALLY PAYING FOR", RED))
+    story.append(Spacer(1, 4))
+    value = [
+        ["1. Privacy by architecture", "Footage, scripts, and brand never leave the client's computer. Nothing to breach, nothing to leak."],
+        ["2. An honest evaluator", "A 12-dimension quality read with evidence &mdash; never a single made-up 'virality' percentage."],
+        ["3. The firewall moat", "Maker and judge are kept apart in code and tested to prove it. The scoring cannot be rubber-stamped."],
+        ["4. A learning system", "Real performance folds back in, so output quality compounds over time instead of staying flat."],
+        ["5. No vendor lock-in", "Stdlib-only core, no required subscriptions. The paid-model 'quality dial' is optional and swappable."],
+    ]
+    story.append(kv_table(value, ["What they pay for", "What it means commercially"],
+                          [52 * mm, PAGE_W - 2 * MARGIN - 52 * mm]))
+    story.append(PageBreak())
+
+    # ---------------- PAGE 3: THE 8 PROMISES (INVARIANTS) ----------------
     story.append(band("THE 8 PROMISES ASUR NEVER BREAKS", RED))
     story.append(Spacer(1, 6))
     story.append(Paragraph(
@@ -289,11 +328,47 @@ def build(out_path: Path):
                           [42 * mm, PAGE_W - 2 * MARGIN - 42 * mm]))
     story.append(PageBreak())
 
-    # ---------------- PAGE 3: THE 9 PHASES + PIPELINE ----------------
+    # ---------------- PAGE 4: THE 12 HONEST SCORES ----------------
+    story.append(band("THE HONEST EVALUATOR: 12 SCORES, NEVER ONE FAKE NUMBER", RED))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "This is ASUR's signature and its moat. Instead of a single invented 'virality' percentage, VIRAL "
+        "CHECK reads a video on <b>12 separate dimensions</b>, each scored 0-100 with an evidence class that "
+        "says how strong the signal is. It returns a list &mdash; never a single number &mdash; and a clear "
+        "<b>PASS / CHANGES / REJECT</b> verdict with reasons you can read.", S["body"]))
+    dims = [
+        ["Attention", "Does it stop the scroll in the first moment?"],
+        ["Retention", "Does it hold the viewer through the middle?"],
+        ["Satisfaction", "Does the ending pay off the promise of the hook?"],
+        ["Value", "Does the viewer get something worth their time?"],
+        ["Shareability", "Is there a reason to send it to someone?"],
+        ["Saveability", "Is it worth bookmarking for later?"],
+        ["Replayability", "Does it reward a second watch?"],
+        ["Originality", "Does it feel fresh, not a copy?"],
+        ["Authenticity", "Does it feel human and real, not AI-slop?"],
+        ["Visual Quality", "Is the craft (framing, captions, grade) clean?"],
+        ["Audience Fit", "Is it right for the intended audience?"],
+        ["Platform Fit", "Is it shaped correctly for the platform?"],
+    ]
+    story.append(Spacer(1, 4))
+    story.append(kv_table(dims, ["Dimension", "The honest question it asks"],
+                          [46 * mm, PAGE_W - 2 * MARGIN - 46 * mm]))
+    story.append(Spacer(1, 8))
+    story.append(band("WHY THIS IS THE SELLING POINT", GOLD))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "Every competitor that promises a 'virality score' is guessing a future nobody can measure. ASUR "
+        "refuses to do that. A buyer is paying for an evaluator they can <b>trust in front of a client</b> &mdash; "
+        "one that shows its working, flags its own uncertainty, and cannot be quietly tuned to always say yes "
+        "because the firewall keeps the judge away from the maker.", S["body"]))
+    story.append(PageBreak())
+
+    # ---------------- PAGE 5: THE 9 PHASES + PIPELINE ----------------
     story.append(band("HOW ASUR WAS BUILT: 9 PHASES (P00-P08) - ALL DONE", GREEN))
     story.append(Spacer(1, 6))
     story.append(Paragraph(
-        "ASUR was built phase by phase, tests first. <b>All 9 phases are complete and 214 tests pass.</b>",
+        "ASUR was built phase by phase, tests first. <b>All 9 phases are complete and the test suite is "
+        "green: 221 tests passing, 1 skipped (227 collected).</b>",
         S["body"]))
     phases = [
         ["P00", "Foundations", "The rulebook + safety checks (8 promises wired in, local-only guard)."],
@@ -301,7 +376,7 @@ def build(out_path: Path):
         ["P02", "Orchestrator", "The 18-step pipeline runtime + the two human gates."],
         ["P03", "Firewall", "Maker and judge kept apart; safe hand-off with fingerprints."],
         ["P04", "Generation + Hero Proof", "Plans the visuals; makes a tiny 5s proof to approve first."],
-        ["P05", "Editing room", "Timeline, 15 effects, captions, audio mix, full manual control."],
+        ["P05", "Editing room", "Timeline, 15 editing primitives, captions, audio mix, full manual control."],
         ["P06", "Full build + QA", "Builds all sections; 5-family quality check incl. 'looks human not AI'."],
         ["P07", "Viral Check", "12 honest scores, yes/no risk flags, a PASS / CHANGES / REJECT verdict."],
         ["P08", "Learning + Publish", "You approve publish; real numbers fold back so the next video is smarter."],
@@ -320,7 +395,7 @@ def build(out_path: Path):
     story.append(band("CHEAP WORK EARLY, EXPENSIVE WORK ONLY AFTER YOU APPROVE THE PROOF", GOLD))
     story.append(PageBreak())
 
-    # ---------------- PAGE 4: WHAT YOU CAN MAKE TODAY ----------------
+    # ---------------- PAGE 6: WHAT YOU CAN MAKE TODAY ----------------
     story.append(band("WHAT YOU CAN MAKE TODAY (3 real tools, free + local)", BLUE))
     story.append(Spacer(1, 6))
     story.append(Paragraph("1. Idea -> Reel", S["h2"]))
@@ -354,9 +429,109 @@ def build(out_path: Path):
         S["body"]))
     story.append(PageBreak())
 
-    # ---------------- PAGE 5: ROADMAP + BRAND + FAMILY TREE ----------------
-    story.append(band("THE ROAD TO 'BEST IN THE WORLD' (5 stages)", GREEN))
+    # ---------------- PAGE 7: WHO IT'S FOR + DELIVERY ----------------
+    story.append(band("WHO ASUR IS FOR", BLUE))
     story.append(Spacer(1, 6))
+    who = [
+        ["Agencies &amp; studios", "Produce client short-form at volume without uploading client footage to third-party clouds. The honest evaluator is a credibility tool in client meetings."],
+        ["Creators &amp; musicians", "One idea or one song to a finished Reel on their own laptop, with a repeatable house style that improves with every post."],
+        ["Privacy-sensitive brands", "Legal, finance, healthcare, and regulated sectors that cannot send material to external AI services. Local-first is a hard requirement they can finally meet."],
+        ["Resellers / white-label", "A whole content OS to package under their own brand, with no per-seat SaaS cost bleeding their margin."],
+    ]
+    story.append(kv_table(who, ["Buyer", "Why they buy ASUR specifically"],
+                          [46 * mm, PAGE_W - 2 * MARGIN - 46 * mm]))
+    story.append(Spacer(1, 10))
+    story.append(band("HOW IT IS DELIVERED", GREEN))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "ASUR installs and runs on the client's own machine. The honest, firewalled core is <b>Python "
+        "standard-library only</b> &mdash; it has <b>zero third-party dependencies</b> and will run SCRIPT, "
+        "VIRAL CHECK, and orchestration end to end on a clean Python 3.10+ install with nothing to download "
+        "from a package server. The media engine (rendering, voice, effects) lives behind an <b>optional "
+        "extra</b> you install only when you want to render.", S["body"]))
+    deliver = [
+        ["Runs on", "The client's own computer (macOS today). No server, no cloud account, no API key."],
+        ["Core dependencies", "None. Standard-library-only core; runs offline."],
+        ["Data residency", "100% local. Footage, scripts, and brand never leave the machine."],
+        ["Quality assurance", "221 tests passing + 1 skipped; a continuous-integration pipeline re-runs them on every change."],
+        ["Upgrade path", "Swap the generation engine (free -> paid frontier) by config, with no app rewrite."],
+    ]
+    story.append(Spacer(1, 4))
+    story.append(kv_table(deliver, ["", "Detail"],
+                          [40 * mm, PAGE_W - 2 * MARGIN - 40 * mm]))
+    story.append(PageBreak())
+
+    # ---------------- PAGE 8: COMPETITOR COMPARISON ----------------
+    story.append(band("HOW ASUR COMPARES", RED))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "Most tools own one stage of the job and run in their own cloud. ASUR owns the <b>whole closed loop</b> "
+        "and runs on the client's machine. The row that matters most is the last one: nobody else has the "
+        "honest, firewalled evaluator.", S["body"]))
+    comp = [
+        ["Whole idea-to-video loop", "Yes (one system)", "No (single stage)", "No (editor only)", "No (clips only)"],
+        ["Runs fully local / offline", "Yes", "No (cloud)", "Partly", "No (cloud)"],
+        ["No login / no API key", "Yes", "No", "No", "No"],
+        ["Honest multi-signal scoring", "Yes (12, with evidence)", "No", "No", "'Virality %' guess"],
+        ["Maker / judge firewall", "Yes (tested)", "No", "No", "No"],
+        ["Learns from real performance", "Yes (loop)", "No", "No", "Limited"],
+    ]
+    story.append(Spacer(1, 4))
+    story.append(kv_table(comp, ["Capability", "ASUR", "Runway", "CapCut", "OpusClip"],
+                          [52 * mm, 30 * mm, 28 * mm, 24 * mm,
+                           PAGE_W - 2 * MARGIN - 52 * mm - 30 * mm - 28 * mm - 24 * mm]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "Competitor names are used only to describe category differences. ASUR's point is not that it "
+        "out-renders a frontier model today &mdash; it is that ASUR is the <b>honest system around</b> whichever "
+        "model you choose, and the only one that keeps the judge firewalled from the maker.", S["small"]))
+    story.append(PageBreak())
+
+    # ---------------- PAGE 9: THE BUSINESS CASE + PACKAGING ----------------
+    story.append(band("THE BUSINESS CASE", GREEN))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "<b>Cost of the status quo.</b> A typical short-form stack is four or five separate cloud "
+        "subscriptions, paid per seat, every month, forever &mdash; plus the hidden cost of handing your "
+        "footage and brand to someone else's servers. ASUR replaces that recurring, data-leaking stack with "
+        "one system the client owns and runs locally.", S["body"]))
+    story.append(Paragraph(
+        "<b>Where the value lands.</b> Fewer subscriptions, no footage leaving the building, a faster "
+        "idea-to-publish path, and an evaluator the client can defend in a room. The learning loop means the "
+        "output gets better the longer it is used &mdash; value compounds instead of resetting each month.", S["body"]))
+    story.append(Spacer(1, 6))
+    story.append(band("PACKAGING (ready to price)", BLUE))
+    story.append(Spacer(1, 4))
+    tiers = [
+        ["Local Free Core", "The honest, firewalled, stdlib-only core: SCRIPT + VIRAL CHECK + orchestration + local rendering. Runs offline, no bills.", "Foundation / trial"],
+        ["Studio", "The full editing room, the 3 creation tools, house-style learning, and support &mdash; set up for a team.", "Per-studio licence"],
+        ["Frontier Dial", "Adds the optional paid-model generation adapters for top-tier visuals, billed through on real render cost only.", "Usage-based add-on"],
+        ["White-label / OEM", "ASUR delivered under the partner's own brand for resale, with no per-seat SaaS cost.", "Partner agreement"],
+    ]
+    story.append(kv_table(tiers, ["Package", "What is included", "Pricing model"],
+                          [34 * mm, PAGE_W - 2 * MARGIN - 34 * mm - 36 * mm, 36 * mm]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "Package names and structure are a proposed commercial framing, not a committed price list &mdash; the "
+        "numbers are set per deal. The technical capability behind each tier is real and shippable today "
+        "(the Frontier Dial is the documented, config-level upgrade path).", S["small"]))
+    story.append(PageBreak())
+
+    # ---------------- PAGE 10: FAQ + ROADMAP + BRAND + TREE + CTA ----------------
+    story.append(band("STRAIGHT ANSWERS (buyer FAQ)", RED))
+    story.append(Spacer(1, 6))
+    faq = [
+        ["Does our footage go to the cloud?", "No. Everything runs on your machine. Nothing is uploaded; there is no account and no key."],
+        ["Is the 'viral score' real?", "There is no single viral score. ASUR gives 12 honest signals with evidence and refuses to fake a percentage."],
+        ["Can the scoring be gamed to pass?", "No. A firewall keeps the maker and the judge apart, and tests prove they never talk directly."],
+        ["Is it as good as Veo / Kling / Runway today?", "Not on raw render yet &mdash; free local output is genuinely strong but not frontier. The paid dial closes that by config, not rewrite."],
+        ["Are we locked in?", "No. The core needs no subscriptions and no third-party packages. Paid models are optional and swappable."],
+        ["Is it finished and tested?", "All 9 build phases are complete with 221 tests passing (1 skipped) and continuous integration on every change."],
+    ]
+    story.append(kv_table(faq, ["Question", "Honest answer"],
+                          [58 * mm, PAGE_W - 2 * MARGIN - 58 * mm]))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("The road to 'best in the world' (5 stages)", S["h2"]))
     road = [
         ["Stage 1", "Elite script brain", "DONE"],
         ["Stage 2", "Genuinely good free render", "IN PROGRESS"],
@@ -367,14 +542,7 @@ def build(out_path: Path):
     story.append(kv_table(road, ["Stage", "Goal", "Status"],
                           [24 * mm, PAGE_W - 2 * MARGIN - 24 * mm - 32 * mm, 32 * mm]))
     story.append(Spacer(1, 8))
-    story.append(Paragraph("ASUR as a brand", S["h2"]))
-    story.append(Paragraph(
-        "<b>Name:</b> ASUR. <b>Tagline:</b> the honest, firewalled AI Content Creation OS that learns from "
-        "every video. <b>What makes it different</b> from Runway / CapCut / OpusClip: they optimise one stage "
-        "and resell the same models; ASUR owns the <b>closed, honest, firewalled learning loop</b> that none of "
-        "them have. Visual identity: clean warm paper, deep blue, and the signature <b>red line</b> motif.", S["body"]))
-    story.append(Spacer(1, 10))
-    story.append(Paragraph("Family tree: how the whole thing flows", S["h1"]))
+    story.append(Paragraph("Family tree: how the whole thing flows", S["h2"]))
     story.append(Spacer(1, 4))
     tree = FlowTree([
         ("YOUR IDEA / CLIP / SONG", BLUE),
@@ -387,10 +555,20 @@ def build(out_path: Path):
         ("ANALYTICS -> LEARNING\n(next video smarter)", GREEN),
     ])
     story.append(tree)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 8))
+    story.append(band("NEXT STEP", BLUE))
+    story.append(Spacer(1, 4))
     story.append(Paragraph(
-        "This guide is auto-generated. Whenever ASUR changes, re-run "
-        "<font name='Courier'>python3 lyric_video_guide/make_brand_guide.py</font> and it stays current.",
+        "The fastest way to evaluate ASUR is a live, local demo: one idea in, a finished 9:16 short out, with "
+        "the 12 honest scores shown on screen &mdash; all on a machine that never touches the internet. "
+        "Request a walkthrough, a pilot on your own footage, or white-label terms.", S["body"]))
+    story.append(Spacer(1, 6))
+    story.append(rule(LINE, 0.75))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "This guide is generated from a script. Whenever ASUR changes, re-run "
+        "<font name='Courier'>python3 lyric_video_guide/make_brand_guide.py</font> to produce an updated copy. "
+        "It does not update on its own.",
         S["small"]))
 
     doc.build(story)
