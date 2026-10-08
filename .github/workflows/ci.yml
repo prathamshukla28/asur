@@ -11,13 +11,23 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege: this workflow only reads the repo (ASUR-LOCAL-01 — no remote
+# auth, no writes, no network to models). No job needs more than read access.
+permissions:
+  contents: read
+
+# One run per ref; a newer push cancels an in-flight run on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   stdlib-firewall:
     name: stdlib-only core + firewall
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: "3.12"
           cache: pip
@@ -68,8 +78,8 @@ jobs:
     name: ruff + mypy + pytest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: "3.12"
           cache: pip

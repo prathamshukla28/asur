@@ -1,0 +1,60 @@
+name: Feature Request
+description: Suggest an enhancement for ASUR
+title: "feat: <short summary>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. ASUR is governed by the invariants
+        in `AGENTS.md` (local-first, key-free, firewalled, honest). Please frame
+        your request so it respects them.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this solve? Who benefits?
+      placeholder: "As a user, I want ... so that ..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or API you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you evaluated and why you prefer this one.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - SCRIPT
+        - GENERATION
+        - EDITING
+        - VIRAL CHECK
+        - PUBLISH
+        - PERFORMANCE
+        - LEARNING
+        - CLI / tooling
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariant compatibility
+      description: Confirm this request is compatible with ASUR's constitution.
+      options:
+        - label: This keeps the core local-first and key-free (ASUR-LOCAL-01).
+          required: true
+        - label: This does not break the GENERATION ↔ VIRAL CHECK firewall (ASUR-FIREWALL-01).
+          required: true
+        - label: This does not introduce a single "percent viral" score (ASUR-HONEST-01).
+          required: true

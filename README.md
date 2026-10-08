@@ -1,5 +1,9 @@
 # ASUR
 
+[![CI](https://github.com/prathamshukla28/asur/actions/workflows/ci.yml/badge.svg)](https://github.com/prathamshukla28/asur/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+
 **A local-first, key-free AI Content Creation OS.**
 
 You give it an idea. It researches, writes a strong script, generates and edits

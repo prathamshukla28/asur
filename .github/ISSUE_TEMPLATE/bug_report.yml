@@ -1,0 +1,86 @@
+name: Bug Report
+description: Report a defect in ASUR
+title: "bug: <short summary>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill out the
+        sections below so we can reproduce and fix the issue quickly.
+
+        > Before filing, please confirm the bug is not an intended consequence
+        > of one of ASUR's invariants (see `AGENTS.md`).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: Describe the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: A clear and concise description of the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, deterministic steps. Include commands and inputs.
+      placeholder: |
+        1. Run `...`
+        2. With input `...`
+        3. Observe `...`
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output or traceback
+      description: Paste any error output. This will be rendered as code.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: ASUR version / commit
+      description: Output of `git rev-parse --short HEAD` or the package version.
+      placeholder: e.g. 0.1.0 or 14ce32f
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python3 --version`.
+      placeholder: e.g. 3.12.4
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options:
+        - Core only (pip install -e .)
+        - With generation extra (pip install -e ".[generation]")
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. macOS 14.5, Ubuntu 24.04
+    validations:
+      required: true
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have read `AGENTS.md` and this is not expected invariant behavior.
+          required: true
+        - label: This bug does not involve pasting secrets, keys, or private data.
+          required: true
