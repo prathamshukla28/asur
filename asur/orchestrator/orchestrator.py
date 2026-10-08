@@ -24,9 +24,8 @@ stage builders via the versioned append-only Workspace (ASUR-VERSION-01).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
-from ..core.gate import SHIP, HOLD, BLOCK, Check, GateResult, approval_gate, run_gate
+from ..core.gate import BLOCK, HOLD, SHIP, Check, GateResult, approval_gate, run_gate
 from ..core.identity import Identity, get_identity
 from .observability import RunLog
 from .states import (
@@ -40,7 +39,7 @@ from .states import (
     stage_of,
 )
 
-__all__ = ["Orchestrator", "ControlToken", "StepResult"]
+__all__ = ["ControlToken", "Orchestrator", "StepResult"]
 
 
 @dataclass
@@ -52,9 +51,9 @@ class ControlToken:
     """
 
     state: str
-    gate: Optional[str] = None
-    disposition: Optional[str] = None
-    digest: Optional[str] = None
+    gate: str | None = None
+    disposition: str | None = None
+    digest: str | None = None
     residency: int = 0
 
     def as_dict(self) -> dict:
@@ -73,7 +72,7 @@ class StepResult:
 
     advanced: bool
     from_state: str
-    to_state: Optional[str]
+    to_state: str | None
     result: GateResult
     reasons: list = field(default_factory=list)
 
@@ -97,7 +96,7 @@ class Orchestrator:
         run_id: str,
         *,
         state: str = "DRAFT",
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ):
         if state not in STATE_INDEX:
             raise ValueError(f"unknown start state {state!r}")
@@ -121,7 +120,7 @@ class Orchestrator:
     def is_done(self) -> bool:
         return is_terminal(self.state)
 
-    def _expensive_blocked(self, target: str) -> Optional[str]:
+    def _expensive_blocked(self, target: str) -> str | None:
         """Return a reason string if entering *target* is expensive-before-gate.
 
         Expensive stages (>= EXPENSIVE_FLOOR_STAGE) are unreachable until the
@@ -144,9 +143,9 @@ class Orchestrator:
     def step(
         self,
         *,
-        checks: Optional[list[Check]] = None,
-        approver: Optional[Identity] = None,
-        digest: Optional[str] = None,
+        checks: list[Check] | None = None,
+        approver: Identity | None = None,
+        digest: str | None = None,
         allow_self_approval: bool = False,
     ) -> StepResult:
         """Attempt the single legal forward transition from the current state.
@@ -210,6 +209,6 @@ class Orchestrator:
                               res, res.reasons)
         return self._stay(res, to=target)
 
-    def _stay(self, res: GateResult, to: Optional[str] = None) -> StepResult:
+    def _stay(self, res: GateResult, to: str | None = None) -> StepResult:
         self.residency += 1
         return StepResult(False, self.state, to, res, res.reasons)

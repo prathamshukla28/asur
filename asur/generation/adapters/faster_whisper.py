@@ -17,7 +17,7 @@ MEDIA_TYPE = "captions"
 def transcribe(audio_path: str, *, language: str = "en", **params: Any) -> dict[str, Any]:
     """Produce word-timed captions locally. Requires asur[generation]; raises otherwise."""
     try:  # pragma: no cover - requires the generation extra, never in CI
-        import faster_whisper  # noqa: F401
+        import faster_whisper  # type: ignore[import-untyped]  # noqa: F401
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
             "faster-whisper adapter needs the generation extra: "

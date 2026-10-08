@@ -23,7 +23,7 @@ import getpass
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 __all__ = ["Identity", "get_identity"]
 
@@ -53,7 +53,7 @@ def _os_user() -> str:
     # It never hits the network. Guard against the rare empty/raising case.
     try:
         user = getpass.getuser()
-    except Exception:
+    except Exception:  # noqa: BLE001 - guard the rare empty/raising case, stay key-free
         user = ""
     return user or os.environ.get("USER") or os.environ.get("LOGNAME") or "unknown"
 

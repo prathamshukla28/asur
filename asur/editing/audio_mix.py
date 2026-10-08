@@ -9,8 +9,6 @@ here.
 
 from __future__ import annotations
 
-from typing import Optional
-
 # Reference levels in dBFS (0 = full scale, negative = quieter). Voice sits near
 # the top; music sits well under it so narration stays intelligible. These are
 # the structural defaults the checker enforces (ASUR-EXPLAIN-01).

@@ -1,20 +1,20 @@
 """Build the ASUR Lyric-Video beginner guide PDF (reportlab, no external assets)."""
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     BaseDocTemplate,
+    Flowable,
     Frame,
+    PageBreak,
     PageTemplate,
     Paragraph,
     Spacer,
     Table,
     TableStyle,
-    PageBreak,
-    Flowable,
 )
 
 OUT = "/Users/user/code security 10/asur/lyric_video_guide/ASUR-Lyric-Video-Guide.pdf"

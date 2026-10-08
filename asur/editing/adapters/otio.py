@@ -19,7 +19,7 @@ from typing import Any
 def _require_otio() -> Any:
     """Import opentimelineio or raise a clear, actionable error. Never in CI."""
     try:  # pragma: no cover - requires the generation extra, never in CI
-        import opentimelineio as otio  # noqa: F401
+        import opentimelineio as otio  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
             "OTIO adapter needs the generation extra: "

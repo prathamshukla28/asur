@@ -24,10 +24,7 @@ randomness, so the same view always yields the same scores.
 
 from __future__ import annotations
 
-from typing import Any
-
 from ..script.evidence import (
-    EMPIRICAL,
     HYPOTHESIS,
     STRONG_EVIDENCE,
     VERIFIED_FACT,

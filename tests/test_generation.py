@@ -21,24 +21,23 @@ from pathlib import Path
 import pytest
 
 from asur.core.envelope import verify_checksum
-from asur.script.idea import build_idea
-from asur.script.research import build_research
-from asur.script.audience import build_audience
-from asur.script.strategy import build_strategy
-from asur.script.hooks import build_hooks
-from asur.script.script_builder import build_script
-
-from asur.generation.creative_direction import build_creative_direction
-from asur.generation.visual_screenplay import build_visual_screenplay
-from asur.generation.asset_strategy import build_asset_plan, _DEFAULT_MODEL
-from asur.generation.generation_plan import build_generation_plan
 from asur.generation import hero_proof
+from asur.generation.asset_strategy import _DEFAULT_MODEL, build_asset_plan
+from asur.generation.creative_direction import build_creative_direction
+from asur.generation.generation_plan import build_generation_plan
 from asur.generation.hero_proof import build_hero_proof, verify_render
 from asur.generation.license_guard import (
     TRAP_LIST,
     LicenseViolation,
     check_asset_license,
 )
+from asur.generation.visual_screenplay import build_visual_screenplay
+from asur.script.audience import build_audience
+from asur.script.hooks import build_hooks
+from asur.script.idea import build_idea
+from asur.script.research import build_research
+from asur.script.script_builder import build_script
+from asur.script.strategy import build_strategy
 
 SAMPLE_IDEA = "why most people waste money on AI tools"
 PROJECT_ID = "test-generation"
@@ -104,7 +103,7 @@ def test_asset_plan_uses_locked_stack_defaults():
 
 def test_default_model_table_has_no_trapped_models():
     """ASUR-PROV-01: no locked-stack default is on the license trap list."""
-    for _strategy, (model, _media, _license) in _DEFAULT_MODEL.items():
+    for model, _media, _license in _DEFAULT_MODEL.values():
         assert model.casefold() not in TRAP_LIST
 
 
@@ -218,7 +217,7 @@ def test_every_asset_carries_provenance_and_license():
 
 def test_asset_plan_fails_closed_on_trapped_asset(monkeypatch):
     """ASUR-GATE-01: a trapped model in a monetized plan blocks plan creation."""
-    import asur.generation.asset_strategy as asset_strategy
+    from asur.generation import asset_strategy
 
     # Force the image default to a trapped, non-commercial model.
     patched = dict(asset_strategy._DEFAULT_MODEL)
@@ -284,7 +283,7 @@ def test_sora_only_appears_as_a_forbidden_marker():
     """ADR-0004/G8: 'sora' appears only as an 'avoid' trap, never as an option."""
     assert TRAP_LIST["sora"]["kind"] == "avoid"
     # No locked-stack default is Sora.
-    for _s, (model, _m, _l) in _DEFAULT_MODEL.items():
+    for model, _m, _l in _DEFAULT_MODEL.values():
         assert "sora" not in model.casefold()
 
 

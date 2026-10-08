@@ -10,8 +10,6 @@ that requirement and checks structural correctness. No rendering happens here.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from .timeline import REEL_HEIGHT
 
 # Instagram Reels reserves roughly the top and bottom ~10-12% for UI chrome.
@@ -87,6 +85,6 @@ def check_caption(caption: dict, *, clip_start: float, clip_end: float) -> dict:
 
 def safe_area_pixels(height: int = REEL_HEIGHT) -> dict:
     """The safe band boundaries in pixels, for a render adapter to consume."""
-    top = int(round(height * SAFE_TOP_FRACTION))
-    bottom = int(round(height * (1.0 - SAFE_BOTTOM_FRACTION)))
+    top = round(height * SAFE_TOP_FRACTION)
+    bottom = round(height * (1.0 - SAFE_BOTTOM_FRACTION))
     return {"top_px": top, "bottom_px": bottom, "usable_px": bottom - top}

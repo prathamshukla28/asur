@@ -17,10 +17,9 @@ import pytest
 
 from asur.core import canonical, identity
 from asur.core.envelope import make_artifact, verify_checksum
-from asur.core.workspace import Workspace, WorkspaceError
+from asur.core.gate import BLOCK, HOLD, SHIP, Check, approval_gate, run_gate
 from asur.core.identity import Identity
-from asur.core import gate
-from asur.core.gate import Check, run_gate, approval_gate, SHIP, HOLD, BLOCK
+from asur.core.workspace import Workspace, WorkspaceError
 
 
 # -- canonical -----------------------------------------------------------

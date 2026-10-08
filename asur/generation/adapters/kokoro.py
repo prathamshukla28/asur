@@ -17,7 +17,7 @@ MEDIA_TYPE = "audio_voice"
 def synthesize(text: str, *, voice: str = "default", **params: Any) -> dict[str, Any]:
     """Synthesize narration locally. Requires asur[generation]; raises otherwise."""
     try:  # pragma: no cover - requires the generation extra, never in CI
-        import kokoro  # noqa: F401
+        import kokoro  # type: ignore[import-not-found]  # noqa: F401
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
             "Kokoro adapter needs the generation extra: pip install -e '.[generation]'. "

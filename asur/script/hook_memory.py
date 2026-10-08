@@ -18,14 +18,15 @@ reason it exists so nothing is a black box (ASUR-EXPLAIN-01).
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from ..core.canonical import canonicalize, parse_json
 from ..core.envelope import utc_now_iso
 from ..core.identity import Identity, get_identity
 
-__all__ = ["HookMemory", "HOOK_EVENTS"]
+__all__ = ["HOOK_EVENTS", "HookMemory"]
 
 HOOK_EVENTS = ("generated", "used", "rejected", "published")
 
@@ -41,7 +42,7 @@ class HookMemory:
         self.dir = self.project_root / ".script" / self.MEMORY_DIRNAME
         self.path = self.dir / self.HOOKS_FILENAME
 
-    def ensure(self) -> "HookMemory":
+    def ensure(self) -> HookMemory:
         self.dir.mkdir(parents=True, exist_ok=True)
         return self
 
@@ -51,8 +52,8 @@ class HookMemory:
         hook_text: str,
         event: str,
         project_id: str,
-        metadata: Optional[dict[str, Any]] = None,
-        identity: Optional[Identity] = None,
+        metadata: dict[str, Any] | None = None,
+        identity: Identity | None = None,
     ) -> dict[str, Any]:
         """Append one hook event. Returns the stored record.
 
@@ -82,7 +83,7 @@ class HookMemory:
         *,
         event: str,
         project_id: str,
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ) -> int:
         """Record every hook in *hooks* (each a hooks-artifact hook dict).
 

@@ -24,11 +24,11 @@ the confidence comes from in one short phrase, so the decision is explainable.
 from __future__ import annotations
 
 __all__ = [
-    "VERIFIED_FACT",
-    "STRONG_EVIDENCE",
     "EMPIRICAL",
-    "HYPOTHESIS",
     "EVIDENCE_CLASSES",
+    "HYPOTHESIS",
+    "STRONG_EVIDENCE",
+    "VERIFIED_FACT",
     "claim",
 ]
 

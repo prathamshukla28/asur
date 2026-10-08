@@ -17,7 +17,7 @@ MEDIA_TYPE = "audio_music"
 def generate(prompt: str, *, seconds: float = 10.0, **params: Any) -> dict[str, Any]:
     """Generate an instrumental bed locally. Requires asur[generation]; raises otherwise."""
     try:  # pragma: no cover - requires the generation extra, never in CI
-        import stable_audio_tools  # noqa: F401
+        import stable_audio_tools  # type: ignore[import-not-found]  # noqa: F401
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
             "Stable Audio adapter needs the generation extra: "

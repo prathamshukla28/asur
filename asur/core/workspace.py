@@ -29,14 +29,12 @@ This module owns *persistence and version assignment*; envelope.py owns the
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from .canonical import canonicalize, parse_json
-from .envelope import Artifact, KINDS, verify_checksum
+from .envelope import KINDS, Artifact, verify_checksum
 
 __all__ = ["Workspace", "WorkspaceError"]
 
@@ -58,7 +56,7 @@ class Workspace:
         self.index_path = self.root / "index.json"
 
     # -- setup -----------------------------------------------------------
-    def ensure(self) -> "Workspace":
+    def ensure(self) -> Workspace:
         """Create the workspace directory tree if absent. Idempotent."""
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         if not self.index_path.exists():
@@ -72,11 +70,11 @@ class Workspace:
         kind_dir = self.artifacts_dir / kind
         if not kind_dir.is_dir():
             return 0
-        versions = [
+        parsed = [
             self._parse_version(p.name)
             for p in kind_dir.glob("v*.json")
         ]
-        versions = [v for v in versions if v is not None]
+        versions = [v for v in parsed if v is not None]
         return max(versions) if versions else 0
 
     def next_version(self, kind: str) -> int:
@@ -125,7 +123,7 @@ class Workspace:
         self.save_artifact(latest)
 
     # -- read ------------------------------------------------------------
-    def load_latest(self, kind: str) -> Optional[Artifact]:
+    def load_latest(self, kind: str) -> Artifact | None:
         """Return the highest-version artifact for *kind*, or None."""
         self._check_kind(kind)
         version = self.latest_version(kind)
@@ -133,12 +131,12 @@ class Workspace:
             return None
         return self._load_version(kind, version)
 
-    def load_artifact(self, kind: str, version: int) -> Optional[Artifact]:
+    def load_artifact(self, kind: str, version: int) -> Artifact | None:
         self._check_kind(kind)
         return self._load_version(kind, version)
 
     # -- internals -------------------------------------------------------
-    def _load_version(self, kind: str, version: int) -> Optional[Artifact]:
+    def _load_version(self, kind: str, version: int) -> Artifact | None:
         kind_dir = self.artifacts_dir / kind
         matches = list(kind_dir.glob(f"v{version:04d}-*.json")) if kind_dir.is_dir() else []
         if not matches:
@@ -165,7 +163,7 @@ class Workspace:
             raise ValueError(f"unknown artifact kind: {kind!r}")
 
     @staticmethod
-    def _parse_version(filename: str) -> Optional[int]:
+    def _parse_version(filename: str) -> int | None:
         # "v0003-idea-abc123.json" -> 3
         if not filename.startswith("v"):
             return None

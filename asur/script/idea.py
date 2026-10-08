@@ -21,12 +21,11 @@ Local only, no network (ASUR-LOCAL-01). Fully explainable (ASUR-EXPLAIN-01).
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
 
-__all__ = ["build_idea", "DEFAULT_PLATFORM"]
+__all__ = ["DEFAULT_PLATFORM", "build_idea"]
 
 DEFAULT_PLATFORM = "instagram_reels"
 
@@ -49,7 +48,7 @@ _ACTION_CUES = {
 }
 
 
-def _first_cue(text: str, table: dict[str, tuple]) -> Optional[str]:
+def _first_cue(text: str, table: dict[str, tuple]) -> str | None:
     low = text.lower()
     for label, cues in table.items():
         if any(cue in low for cue in cues):
@@ -142,7 +141,7 @@ def build_idea(
     *,
     platform: str = DEFAULT_PLATFORM,
     language: str = "en",
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Build the ``idea`` artifact from a single human-supplied line."""
     if not one_line or not one_line.strip():

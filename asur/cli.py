@@ -20,18 +20,18 @@ import argparse
 import sys
 from pathlib import Path
 
-from .core.gate import SHIP, HOLD
+from .core.gate import HOLD, SHIP
 from .core.identity import get_identity
 from .core.workspace import Workspace, WorkspaceError
 from .orchestrator import Orchestrator
-from .script.idea import build_idea
-from .script.research import build_research
 from .script.audience import build_audience
-from .script.strategy import build_strategy
-from .script.hooks import build_hooks
 from .script.hook_memory import HookMemory
-from .script.script_builder import build_script
+from .script.hooks import build_hooks
+from .script.idea import build_idea
 from .script.quality_gate import build_qa_report
+from .script.research import build_research
+from .script.script_builder import build_script
+from .script.strategy import build_strategy
 
 
 def _derive_project_id(project_root: Path, explicit: str | None) -> str:
@@ -79,7 +79,7 @@ def _run_script(args: argparse.Namespace) -> int:
         _emit(f"error: could not open workspace: {exc}")
         return 2
 
-    _emit(f"ASUR SCRIPT - Phase 1 (intelligence)")
+    _emit("ASUR SCRIPT - Phase 1 (intelligence)")
     _emit(f"  project : {project_id}")
     _emit(f"  root    : {project_root / '.script'}")
     _emit(f"  creator : {identity.principal()}")

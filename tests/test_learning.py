@@ -8,32 +8,26 @@ publishing stays behind a real human gate and never auto-posts.
 from asur.core.envelope import verify_checksum
 from asur.core.gate import HOLD, SHIP
 from asur.core.identity import Identity
-
+from asur.editing.timeline import (
+    build_edit_plan,
+    build_timeline_from_generation_plan,
+)
+from asur.generation.asset_strategy import build_asset_plan
+from asur.generation.creative_direction import build_creative_direction
+from asur.generation.generation_plan import build_generation_plan
+from asur.generation.visual_screenplay import build_visual_screenplay
+from asur.learning.learning import build_learning, fold_hook_into_memory
+from asur.learning.performance import METRIC_KEYS, build_performance
+from asur.learning.publish_package import build_publish_package, publish_gate
+from asur.script.audience import build_audience
+from asur.script.hook_memory import HookMemory
+from asur.script.hooks import build_hooks
 from asur.script.idea import build_idea
 from asur.script.research import build_research
-from asur.script.audience import build_audience
-from asur.script.strategy import build_strategy
-from asur.script.hooks import build_hooks
 from asur.script.script_builder import build_script
-from asur.script.hook_memory import HookMemory
-
-from asur.generation.creative_direction import build_creative_direction
-from asur.generation.visual_screenplay import build_visual_screenplay
-from asur.generation.asset_strategy import build_asset_plan
-from asur.generation.generation_plan import build_generation_plan
-
-from asur.editing.timeline import (
-    build_timeline_from_generation_plan,
-    build_edit_plan,
-)
-
+from asur.script.strategy import build_strategy
 from asur.tools.projection import build_viral_view
 from asur.viral_check.evaluate import build_viral_check
-
-from asur.learning.publish_package import build_publish_package, publish_gate
-from asur.learning.performance import build_performance, METRIC_KEYS
-from asur.learning.learning import build_learning, fold_hook_into_memory
-
 
 SAMPLE_IDEA = "why most people waste money on AI tools"
 PROJECT_ID = "test-learning"
@@ -280,10 +274,11 @@ def test_publish_gate_distinct_approver_ships():
 # --- file-based metrics ingest (disk front door for PERFORMANCE -> LEARNING) ---
 
 import json as _json
+
 from asur.learning.metrics_ingest import (
+    MetricsFileError,
     build_performance_from_file,
     read_metrics_file,
-    MetricsFileError,
 )
 
 

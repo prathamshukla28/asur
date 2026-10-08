@@ -55,19 +55,19 @@ def test_viral_view_happy_path():
 
 def test_generation_and_viral_views_are_deterministic():
     """ASUR-EXPLAIN-01: same inputs -> identical view (pure projection)."""
-    args = dict(
-        brief={"topic": "x"},
-        hooks={"direction": "story"},
-        quality_floors={"min": 1},
-        cost_policy={"budget": "cheap"},
-    )
+    args = {
+        "brief": {"topic": "x"},
+        "hooks": {"direction": "story"},
+        "quality_floors": {"min": 1},
+        "cost_policy": {"budget": "cheap"},
+    }
     assert build_generation_view(**args) == build_generation_view(**args)
-    vargs = dict(
-        bundle_hashes={"v": "sha256:1"},
-        provenance={"a": {"license": "Apache-2.0"}},
-        platform_facts={"platform": "instagram_reels"},
-        rubric_metadata={"lane": "viral-check"},
-    )
+    vargs = {
+        "bundle_hashes": {"v": "sha256:1"},
+        "provenance": {"a": {"license": "Apache-2.0"}},
+        "platform_facts": {"platform": "instagram_reels"},
+        "rubric_metadata": {"lane": "viral-check"},
+    }
     assert build_viral_view(**vargs) == build_viral_view(**vargs)
 
 

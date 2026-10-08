@@ -17,7 +17,6 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Optional
 
 from ..core.envelope import Artifact
 from ..core.identity import Identity
@@ -89,7 +88,7 @@ def build_performance_from_file(
     metrics_path: str,
     project_id: str,
     *,
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Disk front door: read a metrics file, then build the performance artifact.
 

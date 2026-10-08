@@ -26,9 +26,9 @@ from typing import Any
 
 __all__ = [
     "CANONICAL_PROFILE",
-    "canonicalize",
     "canonical_bytes",
     "canonical_sha256",
+    "canonicalize",
     "parse_json",
 ]
 

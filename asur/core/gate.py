@@ -24,19 +24,19 @@ self-approval. No keys, no network.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
-from .identity import Identity, get_identity
+from .identity import Identity
 
 __all__ = [
-    "SHIP",
-    "HOLD",
     "BLOCK",
+    "HOLD",
+    "SHIP",
     "Check",
     "GateResult",
-    "run_gate",
     "approval_gate",
+    "run_gate",
 ]
 
 SHIP = "SHIP"
@@ -65,7 +65,7 @@ class GateResult:
     """The outcome of running a gate: a disposition plus an explainable trail."""
 
     disposition: str
-    substate: Optional[str]
+    substate: str | None
     reasons: list = field(default_factory=list)
     self_approved: bool = False
 
@@ -105,7 +105,7 @@ def run_gate(name: str, checks: list[Check]) -> GateResult:
     for check in checks:
         try:
             result, reason = check.fn()
-        except Exception as exc:  # fail closed on a broken check
+        except Exception as exc:  # noqa: BLE001 - fail closed on a broken check
             result, reason = BLOCK, f"check {check.name!r} raised: {exc!r}"
         if result not in _RANK:  # unknown disposition -> fail closed
             result, reason = BLOCK, f"check {check.name!r} returned unknown: {result!r}"
@@ -119,8 +119,8 @@ def approval_gate(
     name: str,
     *,
     producer: Identity,
-    approver: Optional[Identity] = None,
-    checks: Optional[list[Check]] = None,
+    approver: Identity | None = None,
+    checks: list[Check] | None = None,
     allow_self_approval: bool = False,
 ) -> GateResult:
     """A gate that requires human approval plus (optionally) content checks.

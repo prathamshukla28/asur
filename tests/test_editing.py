@@ -14,36 +14,31 @@ from __future__ import annotations
 import pytest
 
 from asur.core.envelope import verify_checksum
-
-from asur.editing import source_ref
-from asur.editing.timeline import (
-    Clip,
-    Timeline,
-    build_edit_plan,
-    build_timeline_from_generation_plan,
-)
-from asur.editing.primitives import PRIMITIVES, apply_primitive, is_primitive
+from asur.editing import controls
+from asur.editing.audio_mix import build_audio_mix, check_audio_mix
 from asur.editing.captions import (
     check_caption,
     needs_shaping,
     safe_area_pixels,
     style_caption,
 )
-from asur.editing.audio_mix import build_audio_mix, check_audio_mix
-from asur.editing import controls
-
+from asur.editing.primitives import PRIMITIVES, apply_primitive, is_primitive
+from asur.editing.timeline import (
+    Clip,
+    Timeline,
+    build_edit_plan,
+    build_timeline_from_generation_plan,
+)
+from asur.generation.asset_strategy import build_asset_plan
+from asur.generation.creative_direction import build_creative_direction
+from asur.generation.generation_plan import build_generation_plan
+from asur.generation.visual_screenplay import build_visual_screenplay
+from asur.script.audience import build_audience
+from asur.script.hooks import build_hooks
 from asur.script.idea import build_idea
 from asur.script.research import build_research
-from asur.script.audience import build_audience
-from asur.script.strategy import build_strategy
-from asur.script.hooks import build_hooks
 from asur.script.script_builder import build_script
-
-from asur.generation.creative_direction import build_creative_direction
-from asur.generation.visual_screenplay import build_visual_screenplay
-from asur.generation.asset_strategy import build_asset_plan
-from asur.generation.generation_plan import build_generation_plan
-
+from asur.script.strategy import build_strategy
 
 SAMPLE_IDEA = "why most people waste money on AI tools"
 PROJECT_ID = "test-editing"

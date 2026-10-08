@@ -13,8 +13,6 @@ gate in publish_gate() (ASUR-HUMAN-01). Learnings are EMPIRICAL, not universal.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
 from ..script.evidence import EMPIRICAL, claim
@@ -45,7 +43,7 @@ def build_learning(
     project_id: str,
     *,
     prior_template_count: int = 0,
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Fold prediction (viral check) against reality (performance) into learnings.
 
@@ -135,7 +133,7 @@ def fold_hook_into_memory(
     hook_text: str,
     project_id: str,
     performance_artifact: Artifact,
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> dict:
     """Record the published hook (with its measured result) into SCRIPT memory.
 

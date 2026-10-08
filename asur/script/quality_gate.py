@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.envelope import Artifact, make_artifact
-from ..core.gate import BLOCK, HOLD, SHIP, Check, GateResult, run_gate
+from ..core.gate import HOLD, SHIP, Check, GateResult, run_gate
 from ..core.identity import Identity
 from . import source_ref
 
@@ -66,7 +66,6 @@ def _build_checks(
     sections = _sections(script_artifact)
     hook = sections.get("hook", {})
     hook_text = _spoken(hook)
-    language = body.get("language", "en")
 
     def strong_opening() -> tuple[str, str]:
         if not hook_text.strip():

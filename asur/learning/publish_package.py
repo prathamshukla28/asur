@@ -12,8 +12,6 @@ Building the package does NOT publish anything. Publishing is a human gate
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..core.envelope import Artifact, make_artifact
 from ..core.gate import GateResult, approval_gate
 from ..core.identity import Identity
@@ -29,10 +27,10 @@ def build_publish_package(
     *,
     title: str,
     caption: str,
-    hashtags: Optional[list] = None,
+    hashtags: list | None = None,
     cta: str = "",
     platform: str = _DEFAULT_PLATFORM,
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Assemble the publish package from the assembled video + its evaluation.
 
@@ -80,7 +78,7 @@ def publish_gate(
     publish_package_artifact: Artifact,
     *,
     producer: Identity,
-    approver: Optional[Identity] = None,
+    approver: Identity | None = None,
     allow_self_approval: bool = False,
 ) -> GateResult:
     """The publish gate (Stage 25) - the second and final human gate.

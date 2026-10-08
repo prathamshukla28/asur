@@ -301,7 +301,7 @@ def _overlay_exprs(style: str, timed: list[dict] | None) -> str:
             f"[bg][cap]overlay=(W-w)/2:{cap_y}:format=auto[v]"
         )
     # timed captions: inputs 1..N, each enabled only during its window, chained.
-    parts = [f"[0:v]{{VF}}[v0]"]
+    parts = ["[0:v]{VF}[v0]"]
     prev = "[v0]"
     for i, ph in enumerate(timed):
         idx = i + 1

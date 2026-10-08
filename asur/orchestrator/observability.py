@@ -14,13 +14,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from ..core.canonical import canonicalize, parse_json
 from ..core.envelope import utc_now_iso
 from ..core.identity import Identity, get_identity
 
-__all__ = ["RunLog", "LogEvent"]
+__all__ = ["LogEvent", "RunLog"]
 
 # The control-only fields an event may carry. Deliberately NARROW so no
 # findings / criteria / targets can be logged (ASUR-FIREWALL-01).
@@ -62,7 +61,7 @@ class RunLog:
         self.dir = self.project_root / self.ASUR_DIRNAME / self.RUNS_DIRNAME
         self.path = self.dir / f"{run_id}.jsonl"
 
-    def ensure(self) -> "RunLog":
+    def ensure(self) -> RunLog:
         self.dir.mkdir(parents=True, exist_ok=True)
         return self
 
@@ -70,8 +69,8 @@ class RunLog:
         self,
         action: str,
         *,
-        tokens: Optional[dict] = None,
-        identity: Optional[Identity] = None,
+        tokens: dict | None = None,
+        identity: Identity | None = None,
     ) -> LogEvent:
         """Append one event. Fail-closed on any non-control token key.
 

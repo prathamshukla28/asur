@@ -100,7 +100,7 @@ def _det_unit(seed: str) -> float:
 
 
 def _clamp(value: float) -> int:
-    return max(0, min(100, int(round(value))))
+    return max(0, min(100, round(value)))
 
 
 # Each template produces one hook from a subject + action. ``base`` dims give
@@ -311,7 +311,7 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
 )
 
 
-def _first_three_seconds(template: dict[str, Any], subject: str) -> dict[str, str]:
+def _first_three_seconds(template: dict[str, Any], subject: str) -> dict[str, dict[str, str]]:
     """Hook + visual as one unit: the first-3-seconds blueprint."""
     return {
         "0.0-0.5s_pattern_interrupt": {
@@ -347,7 +347,7 @@ def _score_hook(
     subject: str,
     strategy_emotion: str,
     language_target: str,
-) -> dict[str, Any]:
+) -> tuple[dict[str, int], int, str]:
     base = template.get("base", {})
     scores: dict[str, int] = {}
     for dim in SCORE_DIMS:

@@ -14,12 +14,10 @@ Honesty rules (ASUR-HONEST-01):
 
 from __future__ import annotations
 
-from typing import Any
-
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
-from .dimensions import score_all
 from . import source_ref
+from .dimensions import score_all
 
 # Verdict vocabulary (closed set).
 PASS = "PASS"

@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from ..core.canonical import canonical_sha256, canonicalize, parse_json
 from ..core.identity import Identity, get_identity
@@ -68,7 +67,7 @@ class HandoffQueue:
         self.dir = self.project_root / self.ASUR_DIRNAME / self.QUEUE_DIRNAME
         self.path = self.dir / f"{run_id}.jsonl"
 
-    def ensure(self) -> "HandoffQueue":
+    def ensure(self) -> HandoffQueue:
         self.dir.mkdir(parents=True, exist_ok=True)
         return self
 
@@ -79,7 +78,7 @@ class HandoffQueue:
         task_id: str,
         bundle: dict,
         *,
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ) -> str:
         """Seal a rendered bundle; freeze it; return its content digest.
 
@@ -107,7 +106,7 @@ class HandoffQueue:
         self,
         task_id: str,
         *,
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ) -> str:
         """Atomically claim a sealed bundle (one claimant). Return sealed digest.
 
@@ -136,7 +135,7 @@ class HandoffQueue:
         digest: str,
         disposition: str,
         *,
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ) -> None:
         """Record the digest VIRAL CHECK actually evaluated + its disposition."""
         if self._latest(_CLAIM, task_id) is None:
@@ -155,7 +154,7 @@ class HandoffQueue:
         self,
         task_id: str,
         *,
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ) -> str:
         """Advance the bundle iff sealed == verdict == on-disk digest (3-way).
 
@@ -200,8 +199,8 @@ class HandoffQueue:
 
     # -- internals ----------------------------------------------------------
 
-    def _latest(self, kind: str, task_id: str) -> Optional[dict]:
-        found: Optional[dict] = None
+    def _latest(self, kind: str, task_id: str) -> dict | None:
+        found: dict | None = None
         for event in self.events():
             if event.get("kind") == kind and event.get("task_id") == task_id:
                 found = event
@@ -213,7 +212,7 @@ class HandoffQueue:
         task_id: str,
         payload: dict,
         *,
-        identity: Optional[Identity] = None,
+        identity: Identity | None = None,
     ) -> None:
         ident = identity or get_identity()
         from ..core.envelope import utc_now_iso

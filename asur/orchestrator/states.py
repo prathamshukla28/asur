@@ -16,20 +16,18 @@ Rules enforced here (ASUR-GATE-01 fail-closed, ASUR-VERSION-01 forward-only):
 
 from __future__ import annotations
 
-from typing import Optional
-
 __all__ = [
+    "EXPENSIVE_FLOOR_STAGE",
+    "HUMAN_GATE_STATES",
     "STATES",
     "STATE_INDEX",
-    "TRANSITIONS",
-    "HUMAN_GATE_STATES",
     "TERMINAL_STATE",
+    "TRANSITIONS",
     "CostTier",
-    "EXPENSIVE_FLOOR_STAGE",
-    "next_state",
-    "is_terminal",
-    "stage_of",
     "cost_tier_for_stage",
+    "is_terminal",
+    "next_state",
+    "stage_of",
 ]
 
 # The 18 ordered states (docs/STATE_MACHINE.md). Forward-only, one step each.
@@ -63,7 +61,7 @@ TERMINAL_STATE = STATES[-1]  # LEARNED
 HUMAN_GATE_STATES = frozenset({"HERO_PROOF_APPROVED", "PUBLISH_READY"})
 
 # Forward-only adjacency: each state maps to the single next legal state.
-TRANSITIONS = {
+TRANSITIONS: dict[str, str | None] = {
     STATES[i]: STATES[i + 1] for i in range(len(STATES) - 1)
 }
 TRANSITIONS[TERMINAL_STATE] = None  # LEARNED has no successor
@@ -131,7 +129,7 @@ def cost_tier_for_stage(stage: int) -> str:
     return CostTier.EXPENSIVE
 
 
-def next_state(current: str) -> Optional[str]:
+def next_state(current: str) -> str | None:
     """Return the single legal forward state, or None if terminal/unknown.
 
     Fail-closed: an unknown state has no successor (None), so the orchestrator

@@ -27,9 +27,9 @@ __all__ = [
     "GENERATION_FORBIDDEN",
     "VIRAL_FORBIDDEN",
     "FirewallLeak",
+    "HandoffQueue",
+    "QueueError",
     "build_generation_view",
     "build_viral_view",
     "conformance_scan",
-    "HandoffQueue",
-    "QueueError",
 ]

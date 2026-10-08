@@ -11,8 +11,6 @@ traceable to exactly what was posted (ASUR-PROV-01, ASUR-VERSION-01).
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..core.envelope import Artifact, make_artifact, utc_now_iso
 from ..core.identity import Identity
 from . import source_ref
@@ -39,7 +37,7 @@ def build_performance(
     metrics: dict,
     project_id: str,
     *,
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Record human-provided performance metrics for a published video.
 

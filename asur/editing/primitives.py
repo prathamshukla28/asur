@@ -14,8 +14,6 @@ ASUR-GATE-01).
 
 from __future__ import annotations
 
-from typing import Optional
-
 from .timeline import Clip
 
 PRIMITIVES = (
@@ -64,7 +62,7 @@ def is_primitive(name: str) -> bool:
     return name in _PRIMITIVE_SET
 
 
-def apply_primitive(clip: Clip, primitive_name: str, params: Optional[dict] = None) -> Clip:
+def apply_primitive(clip: Clip, primitive_name: str, params: dict | None = None) -> Clip:
     """Apply a named primitive to *clip* as a new version.
 
     Fails closed on an unknown primitive or a locked clip (ValueError,

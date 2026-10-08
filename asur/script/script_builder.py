@@ -117,7 +117,6 @@ def build_script(
     value_prop = _strategy_val(
         strategy_artifact, "value_prop", f"a clear, honest take on {subject}"
     )
-    cta_val = _strategy_val(strategy_artifact, "cta", "save this")
 
     sections: dict[str, Any] = {}
 

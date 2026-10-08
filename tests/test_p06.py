@@ -3,36 +3,34 @@ final QA (including the ideas-3 anti-AI Human Pass Test and the duration band)."
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from asur.core.envelope import verify_checksum
-from asur.script.idea import build_idea
-from asur.script.research import build_research
-from asur.script.audience import build_audience
-from asur.script.strategy import build_strategy
-from asur.script.hooks import build_hooks
-from asur.script.script_builder import build_script
-from asur.generation.creative_direction import build_creative_direction
-from asur.generation.visual_screenplay import build_visual_screenplay
-from asur.generation.asset_strategy import build_asset_plan
-from asur.generation.generation_plan import build_generation_plan
 from asur.editing.timeline import (
-    build_timeline_from_generation_plan,
     build_edit_plan,
+    build_timeline_from_generation_plan,
 )
-from asur.generation.section_qa import (
-    check_section,
-    sections_to_regenerate,
-    build_section_qa_report,
-)
+from asur.generation.asset_strategy import build_asset_plan
+from asur.generation.creative_direction import build_creative_direction
 from asur.generation.final_qa import (
     HUMAN_PASS_CHECKS,
     QA_FAMILIES,
-    visual_family,
+    build_final_qa_report,
     platform_family,
     run_final_qa,
-    build_final_qa_report,
+    visual_family,
 )
+from asur.generation.generation_plan import build_generation_plan
+from asur.generation.section_qa import (
+    build_section_qa_report,
+    check_section,
+    sections_to_regenerate,
+)
+from asur.generation.visual_screenplay import build_visual_screenplay
+from asur.script.audience import build_audience
+from asur.script.hooks import build_hooks
+from asur.script.idea import build_idea
+from asur.script.research import build_research
+from asur.script.script_builder import build_script
+from asur.script.strategy import build_strategy
 
 SAMPLE_IDEA = "why most people waste money on AI tools"
 PROJECT_ID = "test-p06"

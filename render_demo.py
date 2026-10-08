@@ -154,7 +154,7 @@ def _render_segment(
     """
     top, bottom = GRADIENTS[index % len(GRADIENTS)]
     out = work / f"seg_{index:02d}.mp4"
-    frames = max(int(round(seconds * FPS)), 1)
+    frames = max(round(seconds * FPS), 1)
     # gradients draws the base; zoompan does a slow 1.0 -> ~1.12 push for life.
     # The caption is overlaid at a fixed lower-third y, fading in at the start.
     filtergraph = (
@@ -166,8 +166,10 @@ def _render_segment(
     _run([
         "ffmpeg", "-y",
         "-f", "lavfi", "-i",
-        f"gradients=s={WIDTH}x{HEIGHT}:c0={top}:c1={bottom}:x0=0:y0=0:"
-        f"x1=0:y1={HEIGHT}:d={seconds:.3f}:r={FPS}",
+        (
+            f"gradients=s={WIDTH}x{HEIGHT}:c0={top}:c1={bottom}:x0=0:y0=0:"
+            f"x1=0:y1={HEIGHT}:d={seconds:.3f}:r={FPS}"
+        ),
         "-i", str(caption_png),
         "-i", str(audio),
         "-filter_complex", filtergraph,

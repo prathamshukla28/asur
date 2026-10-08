@@ -21,7 +21,8 @@ HARD RULES (AGENTS.md §4, ADR-0002):
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # Map a model NAME (as carried on a plan job) to (adapter module, function).
 # The module path is resolved lazily so importing this file pulls no media dep.

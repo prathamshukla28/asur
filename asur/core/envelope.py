@@ -33,9 +33,9 @@ Key design choices:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from .canonical import canonical_sha256
 from .identity import Identity, get_identity
@@ -45,8 +45,8 @@ __all__ = [
     "STATUSES",
     "Artifact",
     "make_artifact",
-    "verify_checksum",
     "utc_now_iso",
+    "verify_checksum",
 ]
 
 # The 17 artifact kinds across the full ASUR lifecycle. Phase 1 produces the
@@ -99,9 +99,9 @@ class Artifact:
     creator: dict
     sources: list
     status: str
-    review: Optional[dict]
+    review: dict | None
     checksum: str
-    supersedes: Optional[str]
+    supersedes: str | None
     body: Any = field(default=None)
 
     def as_dict(self) -> dict:
@@ -122,11 +122,11 @@ def make_artifact(
     project_id: str,
     body: Any,
     version: int = 1,
-    sources: Optional[list] = None,
+    sources: list | None = None,
     status: str = "draft",
-    supersedes: Optional[str] = None,
+    supersedes: str | None = None,
     agent: str = "asur",
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Build a fully-formed, checksummed artifact envelope.
 

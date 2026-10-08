@@ -14,7 +14,7 @@ video, audio, text (captions), graphics, effects, transitions.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from ..core.canonical import canonical_sha256
 from ..core.envelope import Artifact, make_artifact
@@ -49,9 +49,9 @@ class Clip:
     crop: dict = field(default_factory=dict)
     masks: list = field(default_factory=list)
     overlays: list = field(default_factory=list)
-    primitive: Optional[str] = None
+    primitive: str | None = None
     locked: bool = False
-    review: Optional[str] = None
+    review: str | None = None
     version_history: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -73,7 +73,7 @@ class Clip:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Clip":
+    def from_dict(cls, data: dict) -> Clip:
         return cls(
             clip_id=data["clip_id"],
             asset_ref=data["asset_ref"],
@@ -113,7 +113,7 @@ class Track:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Track":
+    def from_dict(cls, data: dict) -> Track:
         return cls(
             track_id=data["track_id"],
             type=data["type"],
@@ -152,7 +152,7 @@ class Timeline:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Timeline":
+    def from_dict(cls, data: dict) -> Timeline:
         res = data.get("resolution", {"w": REEL_WIDTH, "h": REEL_HEIGHT})
         return cls(
             timeline_id=data["timeline_id"],
@@ -167,7 +167,7 @@ class Timeline:
             scenes=data.get("scenes", []),
         )
 
-    def find_clip(self, clip_id: str) -> Optional[Clip]:
+    def find_clip(self, clip_id: str) -> Clip | None:
         for track in self.tracks:
             for clip in track.clips:
                 if clip.clip_id == clip_id:
@@ -253,7 +253,7 @@ def build_edit_plan(
     project_id: str,
     *,
     note: str = "initial assembly",
-    identity: Optional[Identity] = None,
+    identity: Identity | None = None,
 ) -> Artifact:
     """Wrap a Timeline as a versioned ``edit_plan`` artifact (ASUR-VERSION-01).
 

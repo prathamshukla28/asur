@@ -17,14 +17,13 @@ from asur.core.envelope import verify_checksum
 from asur.core.gate import SHIP
 from asur.core.workspace import Workspace
 from asur.script import source_ref
-from asur.script.idea import build_idea
-from asur.script.research import build_research
 from asur.script.audience import build_audience
-from asur.script.strategy import build_strategy
-from asur.script.hooks import build_hooks, SCORE_DIMS, MIN_HOOKS
-from asur.script.script_builder import build_script, SECTION_ORDER, SECTION_FIELDS
+from asur.script.hooks import MIN_HOOKS, SCORE_DIMS, build_hooks
+from asur.script.idea import build_idea
 from asur.script.quality_gate import build_qa_report, run_quality_gate
-
+from asur.script.research import build_research
+from asur.script.script_builder import SECTION_FIELDS, SECTION_ORDER, build_script
+from asur.script.strategy import build_strategy
 
 SAMPLE_IDEA = "why most people waste money on AI tools"
 PROJECT_ID = "test-project"
@@ -243,7 +242,7 @@ def test_determinism_same_idea_same_checksums():
 # P01 additions: hook A/B variant grouping (G2) + append-only hook memory (G3)
 # ---------------------------------------------------------------------------
 
-from asur.script.hook_memory import HookMemory, HOOK_EVENTS
+from asur.script.hook_memory import HOOK_EVENTS, HookMemory
 
 
 def test_ab_variants_are_data_only():

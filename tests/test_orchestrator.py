@@ -9,24 +9,21 @@ from __future__ import annotations
 
 import pytest
 
-from asur.core.gate import SHIP, HOLD, BLOCK, Check
+from asur.core.gate import BLOCK, HOLD, SHIP, Check
 from asur.core.identity import Identity
 from asur.orchestrator import (
-    STATES,
-    STATE_INDEX,
-    TRANSITIONS,
+    EXPENSIVE_FLOOR_STAGE,
     HUMAN_GATE_STATES,
+    STATES,
     TERMINAL_STATE,
     CostTier,
-    EXPENSIVE_FLOOR_STAGE,
-    next_state,
-    is_terminal,
-    stage_of,
-    cost_tier_for_stage,
     Orchestrator,
     RunLog,
+    cost_tier_for_stage,
+    is_terminal,
+    next_state,
+    stage_of,
 )
-
 
 # --- state machine shape (ASUR-VERSION-01 forward-only, SPEC-GAP G6) ----------
 
