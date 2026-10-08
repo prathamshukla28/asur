@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd template for the ASUR daily development driver.
+
+  This is a TEMPLATE. It is NOT installed automatically (that would be a settings
+  change — AGENTS.md section 11 human gate). To use it, a human must:
+
+    1. Edit the two REPLACE_ME paths below:
+         - the repo root (the directory with pyproject.toml and the asur/ package)
+         - the Python interpreter (use the project venv's python if you made one)
+    2. Copy it into your LaunchAgents directory:
+         cp scripts/com.asur.daily.plist ~/Library/LaunchAgents/
+    3. Load it:
+         launchctl load ~/Library/LaunchAgents/com.asur.daily.plist
+    4. To stop it later:
+         launchctl unload ~/Library/LaunchAgents/com.asur.daily.plist
+
+  The driver makes NO git commits, NO push, NO publish. It writes one dated
+  report under docs/build/daily/ and logs stdout/stderr to the paths below.
+
+  Schedule below: every weekday (Mon–Fri) at 09:00 local time. Edit the
+  StartCalendarInterval entries to change days/time.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.asur.daily</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- REPLACE_ME: absolute path to the Python interpreter. -->
+        <string>/REPLACE_ME/.venv/bin/python3</string>
+        <string>-m</string>
+        <string>asur.tools.daily_driver</string>
+    </array>
+
+    <!-- REPLACE_ME: absolute path to the repo root (has pyproject.toml + asur/). -->
+    <key>WorkingDirectory</key>
+    <string>/REPLACE_ME/asur</string>
+
+    <!-- Run on weekdays at 09:00. launchd treats an array of dicts as OR. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <!-- Console summary is captured here; the full report is in docs/build/daily/. -->
+    <key>StandardOutPath</key>
+    <string>/tmp/asur-daily.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/asur-daily.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
