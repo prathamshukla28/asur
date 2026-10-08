@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asur"
+version = "0.1.0"
+description = "ASUR - a local-first, key-free AI Content Creation OS. Phase 1: SCRIPT intelligence."
+readme = "README.md"
+requires-python = ">=3.10"
+# ASUR-LOCAL-01: zero runtime dependencies. Stdlib only. No network, no keys.
+# The core, SCRIPT, VIRAL CHECK, ORCHESTRATOR, and FIREWALL layers import ONLY
+# the standard library. This list MUST stay empty (see ADR-0002, SPEC-GAP G7).
+dependencies = []
+
+# Media/generation path only. Declared here so `pip install -e .[generation]`
+# can pull them, but the stdlib core NEVER imports these (ADR-0002, ADR-0004).
+# A stdlib-only install must still run SCRIPT + VIRAL CHECK + orchestration.
+# Versions are intentionally UNPINNED for now (pin in P04 when adapters land).
+# Heavy model weights (Wan 2.2, SDXL, Kokoro, Stable Audio) and ComfyUI are
+# installed/managed separately, outside pip — see docs/GENERATION_STACK.md.
+[project.optional-dependencies]
+generation = [
+    "moviepy",          # MIT - FFmpeg-backed editing/compositing
+    "faster-whisper",   # MIT - word-level caption timing (no network at runtime)
+    "librosa",          # ISC - beat map / audio analysis
+    "opentimelineio",   # Apache-2.0 - timeline interchange (OTIO)
+    "torch",            # BSD-3 - tensor runtime (MPS on Apple Silicon, else CPU)
+    "diffusers",        # Apache-2.0 - SDXL image pipeline (OpenRAIL++-M weights)
+    "transformers",     # Apache-2.0 - SDXL text encoders
+    "accelerate",       # Apache-2.0 - diffusers device placement
+    "safetensors",      # Apache-2.0 - weight format SDXL loads from
+    "Pillow",           # HPND/MIT-CMU - resize/crop generated frame to 1080x1920
+]
+
+[project.scripts]
+asur = "asur.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["asur*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Opt-in real-render tier. Default `pytest` skips it via addopts; run it with
+# `pytest -m integration`. These tests shell out to the ffmpeg binary and are
+# skipped automatically when ffmpeg is absent (keeps the unit suite no-network,
+# no-GPU, and count-stable — see docs/build/PHASES.md P04/G10).
+markers = [
+    "integration: real-render pipeline test; needs the ffmpeg binary; opt-in only",
+]
+addopts = "-m 'not integration'"

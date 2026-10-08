@@ -1,0 +1,93 @@
+name: ASUR CI
+
+# ASUR-LOCAL-01 / ASUR-FIREWALL-01 enforced in CI.
+# No GPU, no network to models, no real model downloads here (G10): the stdlib
+# core must install and import with ZERO third-party packages, and the firewall
+# must leak no forbidden target names. Real model runs are local-only/manual.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  stdlib-firewall:
+    name: stdlib-only core + firewall
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Install the package with NO extras. If the stdlib core secretly needs a
+      # media dep, this install + the import probe below will fail.
+      - name: Install core (no extras)
+        run: pip install .
+
+      # ASUR-LOCAL-01: importing the stdlib layers must NOT pull in any heavy /
+      # media / network dependency. Snapshot sys.modules before and after and
+      # assert none of the forbidden set appeared. Stronger than try/except:
+      # it catches an accidental top-level import anywhere in the import graph.
+      - name: Assert stdlib-only core (no forbidden deps leak)
+        run: |
+          python - <<'PY'
+          import sys
+          before = set(sys.modules)
+          import asur, asur.core, asur.script, asur.orchestrator, asur.tools, asur.viral_check, asur.learning  # noqa: F401
+          after = set(sys.modules)
+          forbidden = {
+              "torch", "diffusers", "transformers", "kokoro", "soundfile",
+              "numpy", "PIL", "cv2", "opentimelineio", "moviepy", "librosa",
+              "faster_whisper", "stable_audio_tools",
+              "requests", "httpx", "aiohttp", "urllib3",
+          }
+          leaked = sorted(forbidden & {m.split(".")[0] for m in after - before})
+          if leaked:
+              print("FORBIDDEN DEPENDENCIES LEAKED INTO STDLIB CORE:", leaked)
+              sys.exit(1)
+          print("stdlib-only core OK: no forbidden dependency imported.")
+          PY
+
+      # ASUR-FIREWALL-01: VIRAL_VIEW strips quality/hardness TARGETS by name.
+      # Fail the build if a forbidden target field name appears outside its own
+      # definition in the firewall projection module. (Source-level grep guard;
+      # the test suite also asserts this behaviourally.)
+      - name: Firewall grep guard (no target-name leak)
+        run: |
+          if grep -rInE 'quality_targets|hardness_targets|target_score|per_dimension_target|what_good_is' \
+              --include='*.py' asur/asur/generation asur/asur/editing asur/asur/viral_check; then
+            echo "FIREWALL LEAK: a forbidden target field name appears in a generation/editing/viral path."
+            exit 1
+          fi
+          echo "Firewall grep guard OK."
+
+  lint-type-test:
+    name: ruff + mypy + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # No [dev] extra exists; install the tools directly. The package itself is
+      # stdlib-only, so a plain `pip install .` is enough for pytest to import it.
+      - name: Install core + dev tools
+        run: |
+          pip install .
+          pip install ruff mypy pytest
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Mypy
+        run: mypy asur || true   # type coverage is advisory for now (see DEFERRED.md)
+
+      # Default addopts already excludes the `integration` marker, so this runs
+      # the stdlib unit suite only (no ffmpeg, no GPU, no network).
+      - name: Pytest (unit suite)
+        run: pytest -q

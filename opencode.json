@@ -1,0 +1,44 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "docs/spec/SPEC.md"
+  ],
+  "permission": {
+    "edit": "allow",
+    "webfetch": "deny",
+    "bash": {
+      "*": "ask",
+
+      "python -m pytest*": "allow",
+      "python3 -m pytest*": "allow",
+      "pytest*": "allow",
+      "python -m py_compile*": "allow",
+      "python3 -m py_compile*": "allow",
+      "ruff*": "allow",
+      "flake8*": "allow",
+      "mypy*": "allow",
+      "python -m build*": "allow",
+      "python3 -m build*": "allow",
+      "pip install -e .*": "allow",
+      "ffmpeg*": "allow",
+      "ffprobe*": "allow",
+      "docker compose*": "allow",
+
+      "git add*": "allow",
+      "git commit*": "allow",
+      "git tag*": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+
+      "git push*": "deny",
+      "git remote add*": "deny",
+      "git remote set-url*": "deny",
+      "git rebase*": "deny",
+      "git reset --hard*": "deny",
+      "git commit --amend*": "deny",
+      "git filter-branch*": "deny"
+    }
+  }
+}
