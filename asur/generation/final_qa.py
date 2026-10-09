@@ -16,6 +16,7 @@ from typing import Any
 
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
+from ..platforms import get_platform
 from . import source_ref
 
 QA_FAMILIES = ("visual", "audio", "text_typography", "content", "platform")
@@ -104,19 +105,38 @@ def platform_family(
     height: int,
     duration_s: float,
     target_band_s: tuple[float, float] | None = None,
+    platform: str | None = None,
 ) -> dict[str, Any]:
     """Platform QA = machine-decidable structural checks (no review needed).
 
-    Dimensions must be exactly 1080x1920 (9:16). Duration-band (G16): if a target
-    band is declared on the brief, a duration outside it is a WARNING, never a
-    hard fail -- ASUR keeps the 60s default band-free.
+    Dimensions must match the SELECTED platform's FormatSpec (P09b/G19). With no
+    platform selected ASUR uses the locked default (Instagram Reels, 1080x1920
+    9:16), so the historical behaviour is byte-identical. An unknown platform id
+    fails closed (UnknownPlatform, ASUR-GATE-01) rather than silently defaulting.
+
+    Duration-band (G16): the band comes from the pack's FormatSpec unless an
+    explicit ``target_band_s`` overrides it. A duration outside the band is a
+    WARNING, never a hard fail -- ASUR keeps the Instagram 60s default band-free.
     """
+    spec = get_platform(platform).format_spec
+    expected_width, expected_height = spec.width, spec.height
+    if target_band_s is None:
+        target_band_s = spec.duration_band_s
+
     checks: list[dict[str, Any]] = []
 
-    if width == _REEL_WIDTH and height == _REEL_HEIGHT:
-        checks.append({"check": "dimensions", "status": _PASS, "reason": "1080x1920 9:16"})
+    if width == expected_width and height == expected_height:
+        checks.append(
+            {"check": "dimensions", "status": _PASS, "reason": f"{width}x{height} {spec.aspect_ratio}"}
+        )
     else:
-        checks.append({"check": "dimensions", "status": _FAIL, "reason": f"{width}x{height} is not 1080x1920"})
+        checks.append(
+            {
+                "check": "dimensions",
+                "status": _FAIL,
+                "reason": f"{width}x{height} is not {expected_width}x{expected_height}",
+            }
+        )
 
     if target_band_s is None:
         checks.append({"check": "duration_band", "status": _PASS, "reason": "no target band declared (default)"})
@@ -137,12 +157,14 @@ def run_final_qa(
     duration_s: float = 60.0,
     target_band_s: tuple[float, float] | None = None,
     reviews: dict[str, Any] | None = None,
+    platform: str | None = None,
 ) -> dict[str, Any]:
     """Run all five QA families. Returns {disposition, substate, families}.
 
     Disposition: BLOCK if any family fails; else HOLD if any family is awaiting a
     human review (fail closed per ASUR-HONEST-01/GATE-01); else SHIP. Warnings
-    (e.g. duration band) do not block.
+    (e.g. duration band) do not block. ``platform`` selects the output surface for
+    the structural platform family (default = Instagram Reels, byte-identical).
     """
     reviews = reviews or {}
     families = [
@@ -150,7 +172,13 @@ def run_final_qa(
         audio_family(reviews),
         text_typography_family(reviews),
         content_family(reviews),
-        platform_family(width=width, height=height, duration_s=duration_s, target_band_s=target_band_s),
+        platform_family(
+            width=width,
+            height=height,
+            duration_s=duration_s,
+            target_band_s=target_band_s,
+            platform=platform,
+        ),
     ]
     statuses = {f["status"] for f in families}
     if _FAIL in statuses:
@@ -171,12 +199,14 @@ def build_final_qa_report(
     duration_s: float = 60.0,
     target_band_s: tuple[float, float] | None = None,
     reviews: dict[str, Any] | None = None,
+    platform: str | None = None,
     identity: Identity | None = None,
 ) -> Artifact:
     """Emit a qa_report for the 5-family final QA on the rendered video.
 
     status='ready' only on SHIP; 'rejected' on BLOCK or HOLD (fail closed -- the
     video is not final-QA-clean until a human records the anti-AI review).
+    ``platform`` selects the output surface (default = Instagram Reels).
     """
     result = run_final_qa(
         width=width,
@@ -184,6 +214,7 @@ def build_final_qa_report(
         duration_s=duration_s,
         target_band_s=target_band_s,
         reviews=reviews,
+        platform=platform,
     )
     body = {
         "stage": "final_qa",

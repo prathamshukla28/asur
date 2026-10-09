@@ -15,9 +15,54 @@ from __future__ import annotations
 from ..core.envelope import Artifact, make_artifact
 from ..core.gate import GateResult, approval_gate
 from ..core.identity import Identity
+from ..platforms import DEFAULT_PLATFORM as _DEFAULT_PLATFORM
+from ..platforms import get_platform
 from . import source_ref
 
-_DEFAULT_PLATFORM = "instagram_reels"
+
+def _chapters_from_edit(edit_body: dict) -> list[dict]:
+    clips = edit_body.get("clips")
+    if not isinstance(clips, list):
+        return []
+    chapters: list[dict] = []
+    cursor = 0.0
+    for index, clip in enumerate(clips):
+        if not isinstance(clip, dict):
+            continue
+        start = clip.get("start_s", cursor)
+        label = clip.get("label") or clip.get("scene_id") or f"Section {index + 1}"
+        chapters.append({"start_s": float(start), "title": str(label)})
+        cursor = float(clip.get("end_s", start))
+    return chapters
+
+
+def _description_with_chapters(subject: str, caption: str, chapters: list[dict]) -> str:
+    lines = [caption] if caption else []
+    if chapters:
+        lines.append("")
+        lines.append("Chapters:")
+        for chapter in chapters:
+            total = int(chapter["start_s"])
+            stamp = f"{total // 60:02d}:{total % 60:02d}"
+            lines.append(f"{stamp} {chapter['title']}")
+    return "\n".join(lines)
+
+
+def _longform_fields(pack, edit_body: dict, caption: str, hashtags: list) -> dict:
+    subject = edit_body.get("subject", "")
+    chapters = _chapters_from_edit(edit_body)
+    fields = {
+        "description": _description_with_chapters(subject, caption, chapters),
+        "chapters": chapters,
+        "tags": list(hashtags),
+    }
+    if "category" in pack.publish_fields:
+        fields["category"] = ""
+    if "end_screen" in pack.publish_fields:
+        fields["end_screen"] = []
+    if "cards" in pack.publish_fields:
+        fields["cards"] = []
+    return fields
 
 
 def build_publish_package(
@@ -43,6 +88,10 @@ def build_publish_package(
     viral_body = viral_check_artifact.body or {}
     subject = edit_body.get("subject", "")
 
+    # get_platform fails closed on an unknown id (ASUR-GATE-01); the default
+    # Instagram pack returns '9:16', keeping today's output byte-identical.
+    pack = get_platform(platform)
+
     body = {
         "subject": subject,
         "platform": platform,
@@ -54,7 +103,7 @@ def build_publish_package(
         "cta": cta,
         "viral_verdict": viral_body.get("verdict", "unknown"),
         "metadata": {
-            "aspect_ratio": "9:16",
+            "aspect_ratio": pack.format_spec.aspect_ratio,
             "clip_count": edit_body.get("clip_count", 0),
         },
         "method": (
@@ -62,6 +111,15 @@ def build_publish_package(
             "publishing is a separate human gate and never automatic"
         ),
     }
+
+    # Long-form packs (e.g. youtube_long) declare extra publish fields the Reels
+    # default never carries. We emit those keys ONLY when the chosen pack declares
+    # them, so the Instagram default body stays byte-identical (ASUR-VERSION-01).
+    # Every value is derived from recorded inputs or left as an explicit empty
+    # placeholder for the human to fill - we invent no content (ASUR-HONEST-01,
+    # anti-hallucination §7).
+    if "description" in pack.publish_fields:
+        body.update(_longform_fields(pack, edit_body, caption, hashtags or []))
 
     return make_artifact(
         kind="publish_package",

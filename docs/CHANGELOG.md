@@ -9,6 +9,99 @@ gate.
 
 ## [Unreleased]
 
+### Added — P09c (YouTube extension — long-form hero proof + long-form publish fields)
+- **Hero proof reads the selected pack** (`asur/asur/generation/hero_proof.py`):
+  `build_hero_proof` and `verify_render` now take an optional `platform=` id. The
+  emitted `target_spec` (width / height / aspect_ratio / max_duration_s) and the
+  render verifier's dimension/duration checks are sourced from
+  `get_platform(platform).format_spec` instead of the hard-coded 1080×1920 / 15s
+  literals (the former `1080x1920` reason string is now derived from the pack). So
+  `youtube_long` yields a 1920×1080 / `16:9` hero spec while Instagram stays
+  1080×1920 / `9:16`.
+- **Long-form hero duration sourced from the pack band, not invented** (§7
+  anti-hallucination): the hero-proof `max_duration_s` is the pack's already-declared
+  `duration_band_s` upper bound (`youtube_long` → 1200.0). Instagram declares no band,
+  so the cap falls back to the module default `MAX_HERO_DURATION_S` (15.0) — the
+  default call stays **byte-identical** (ASUR-VERSION-01 / G19). No long-form cap is
+  guessed; the value is read from authorized pack data.
+- **Publish package emits long-form fields when the pack declares them**
+  (`asur/asur/learning/publish_package.py`): when `pack.publish_fields` includes the
+  long-form set, the package now carries `description` (with timestamped **chapters**
+  derived honestly from the edit plan's recorded clips — no invented metrics, no
+  "%viral"), `chapters`, `tags`, and the human-owned placeholders `category`,
+  `end_screen`, `cards`. The Instagram default pack declares none of these, so its
+  body emits **no** extra keys and stays byte-identical.
+- **Byte-identical default, fail-closed otherwise**: with no `platform=` argument
+  every P00–P09b behaviour and artifact checksum is unchanged (the P04 vertical-reel
+  anchor test still passes); an unknown platform id **fails closed** with
+  `UnknownPlatform` at both the hero-proof and publish seams (ASUR-GATE-01), even when
+  `ffprobe` is absent. No cross-import added — ASUR-FIREWALL-01 intact; honest
+  per-dimension scoring untouched (ASUR-HONEST-01). **No network publish** is
+  introduced (ASUR-LOCAL-01 / ASUR-HUMAN-01).
+- **8 tests** in `tests/test_platforms_p09c.py` (hero-proof default-still-vertical
+  anchor, youtube_long landscape spec + 1200.0 cap, unknown-platform fail-closed,
+  `verify_render` platform routing + ffprobe-absent `skipped` degrade,
+  unknown-platform fail-closed, publish default has no long-form keys, publish
+  youtube_long emits long-form fields, publish unknown fail-closed). Full suite
+  **272 passed, 6 deselected** (264 prior unit tests unchanged + 8 new P09c tests).
+
+### Added — P09b (YouTube extension — platform pack wiring)
+- **Final QA reads the selected pack** (`asur/asur/generation/final_qa.py`):
+  `platform_family`, `run_final_qa`, and `build_final_qa_report` now take an
+  optional `platform=` id. Dimensions are checked against the pack's
+  `FormatSpec.width/height` (not a hard-coded 1080×1920), and when no explicit
+  `target_band_s` is given the duration band defaults to the pack's
+  `duration_band_s`. So `youtube_long` (1920×1080) **PASSES** dimensions under its
+  own pack while still **FAILING** under the Instagram default, and `youtube_shorts`
+  applies its 15–60s band as a **warning, not a hard fail** (the G16 pattern is
+  preserved — a 90s Shorts WARNs, it does not escalate the family to fail). An
+  explicit `target_band_s` still overrides the pack band.
+- **Publish package sources aspect ratio from the pack**
+  (`asur/asur/learning/publish_package.py`): `metadata.aspect_ratio` is now
+  `get_platform(platform).format_spec.aspect_ratio` instead of a hard-coded `"9:16"`
+  (IG → `9:16`, `youtube_long` → `16:9`), and `_DEFAULT_PLATFORM` is imported from
+  the registry rather than re-declared. The `platform` string is still carried in
+  the body unchanged; `publish_gate` (HUMAN GATE #2) is untouched.
+- **Byte-identical default, fail-closed otherwise**: both entry points default to
+  `instagram_reels`, so with no `platform=` argument every P00–P09a behaviour and
+  artifact checksum is unchanged; an unknown platform id **fails closed** with
+  `UnknownPlatform` (ASUR-GATE-01). `generation/final_qa.py` imports the stdlib
+  `platforms` layer only — **no GENERATION↔VIRAL CHECK cross-import** is introduced
+  (ASUR-FIREWALL-01; firewall/conformance subset still green).
+- **`hero_proof.py` deliberately unchanged**: Shorts is also 9:16/1080×1920, so it
+  needs no edit; long-form 16:9 hero proof is a P09c concern (plan's prove-small
+  rule). **No network publish** is introduced or planned for YouTube
+  (ASUR-LOCAL-01 / ASUR-HUMAN-01).
+- **17 tests** in `tests/test_platforms_wiring.py`. Full suite **264 passed, 6
+  deselected** (247 prior unit tests unchanged + 17 new wiring tests).
+
+### Added — P09a (YouTube extension — platform registry, behaviour-neutral)
+- **Platform pack layer** (`asur/asur/platforms/`, stdlib-only): new `FormatSpec`
+  and `PlatformPack` frozen dataclasses (`platforms/base.py`) that model a target
+  surface as **data** — aspect ratio, resolution, fps, default duration, optional
+  duration band, safe area, publish field set, and evidence-classed platform facts.
+  Resolves **SPEC-GAP G19** (ASUR v1 hard-coded Instagram Reels 9:16; YouTube is new
+  scope). Plan: `docs/build/YOUTUBE_EXTENSION_PLAN.md`.
+- **Three packs + fail-closed registry** (`platforms/__init__.py`): `instagram_reels`
+  (9:16 / 1080×1920 / 30fps / 60s default / no band — **reproduces today's numbers
+  byte-for-byte**), `youtube_shorts` (9:16 / 1080×1920 / 45s default / 15–60s band),
+  `youtube_long` (16:9 / 1920×1080 / 480s default / 180–1200s band, with
+  chapters/tags/description publish fields). `DEFAULT_PLATFORM='instagram_reels'`;
+  `get_platform(id)` fails closed with `UnknownPlatform` on any unknown id (never a
+  silent default, ASUR-GATE-01).
+- **Firewall-ready facts**: `PlatformPack.platform_facts()` returns
+  `{platform_id, signals:[…]}` as documented, evidence-classed signals — the exact
+  shape `tools/projection.build_viral_view(platform_facts=…)` already accepts, so a
+  pack can feed VIRAL_VIEW without leaking any quality/hardness target
+  (ASUR-FIREWALL-01, ASUR-HONEST-01).
+- **No behaviour change**: this phase adds the registry only; generation/publish are
+  **not** rewired to read it yet (that is P09b/c). All P00–P08 behaviour and artifact
+  checksums are unchanged. **No network publish** is introduced or planned for
+  YouTube (ASUR-LOCAL-01 / ASUR-HUMAN-01).
+- `platforms` added to the stdlib boundary import-linter; **19 tests** in
+  `tests/test_platforms.py`. Full suite **247 passed, 6 deselected** (223 prior unit
+  tests unchanged + 19 platform + 5 new boundary cases for the 5 new modules).
+
 ### Added — Road to 10/10 (real render, honest CI, closed loop)
 - **Real FFmpeg render adapter** (`asur/asur/generation/adapters/ffmpeg.py`): the
   stub is now a real renderer. It drives the `ffmpeg` binary via `subprocess`

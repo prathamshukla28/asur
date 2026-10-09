@@ -23,6 +23,7 @@ STDLIB_ONLY_PACKAGES = (
     "editing",
     "viral_check",
     "learning",
+    "platforms",
 )
 
 NETWORK_FORBIDDEN = frozenset(

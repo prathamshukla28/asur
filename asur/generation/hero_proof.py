@@ -25,12 +25,45 @@ from typing import Any
 
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
+from ..platforms import get_platform
 from . import source_ref
 
-# Target spec for the vertical 9:16 Instagram Reel hero proof.
+# Target spec for the vertical 9:16 Instagram Reel hero proof. These remain the
+# Instagram-Reels fallback so a default (no-platform) call stays byte-identical
+# (ASUR-VERSION-01; G19 "IG default reproduced byte-for-byte"). Other platforms
+# read their own FormatSpec from the pack registry (see ``_target_spec``).
 TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 MAX_HERO_DURATION_S = 15.0
+
+
+def _hero_cap_s(duration_band_s: tuple[float, float] | None) -> float:
+    """Hero-proof max duration, sourced from the pack's declared band.
+
+    We do NOT invent a long-form hero cap (anti-hallucination, AGENTS.md §7).
+    When the pack declares a ``duration_band_s`` we use its upper bound (e.g.
+    youtube_long -> 1200.0). Instagram Reels declares no band, so we fall back
+    to ``MAX_HERO_DURATION_S`` (15.0), keeping the default byte-identical.
+    """
+    if duration_band_s is None:
+        return MAX_HERO_DURATION_S
+    return float(duration_band_s[1])
+
+
+def _target_spec(platform: str | None) -> tuple[dict[str, Any], float]:
+    """Return (target_spec dict, hero_cap_s) for the chosen platform pack.
+
+    Fails closed on an unknown platform id via ``get_platform`` (UnknownPlatform).
+    """
+    spec = get_platform(platform).format_spec
+    cap = _hero_cap_s(spec.duration_band_s)
+    target_spec = {
+        "width": spec.width,
+        "height": spec.height,
+        "aspect_ratio": spec.aspect_ratio,
+        "max_duration_s": cap,
+    }
+    return target_spec, cap
 
 # Which screenplay sections make the most representative proof: the hook (does
 # it stop the scroll?) and the payoff (does it deliver?). These two carry the
@@ -43,6 +76,7 @@ def build_hero_proof(
     visual_screenplay_artifact: Artifact,
     project_id: str,
     *,
+    platform: str | None = None,
     identity: Identity | None = None,
 ) -> Artifact:
     """Produce a ``creative_direction``-adjacent hero-proof manifest artifact.
@@ -73,25 +107,23 @@ def build_hero_proof(
         or j.get("target_asset") in ("voice-track", "music-bed")
     ]
 
+    target_spec, cap = _target_spec(platform)
+
     body: dict[str, Any] = {
         "subject": subject,
         "proof_scene_ids": sorted(proof_scene_ids),
         "proof_scene_count": len(proof_scenes),
         "proof_jobs": proof_jobs,
         "proof_job_count": len(proof_jobs),
-        "target_spec": {
-            "width": TARGET_WIDTH,
-            "height": TARGET_HEIGHT,
-            "aspect_ratio": "9:16",
-            "max_duration_s": MAX_HERO_DURATION_S,
-        },
+        "target_spec": target_spec,
         "review_requirement": (
             "a human reviews the ACTUAL rendered proof (not JSON) and must "
             "approve it before any expensive full generation (HUMAN GATE #1)"
         ),
         "method": (
             "local heuristic: representative hook+payoff scenes, job subset, "
-            "9:16 <=15s target; render + review happen before approval"
+            f"{target_spec['aspect_ratio']} <={cap:g}s target; render + review "
+            "happen before approval"
         ),
     }
 
@@ -145,6 +177,7 @@ def _probe_dimensions_duration(video_path: Path) -> tuple[int, int, float]:
 def verify_render(
     video_path: str | Path,
     *,
+    platform: str | None = None,
     caption_timing_path: str | Path | None = None,
     contact_sheet_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -158,6 +191,9 @@ def verify_render(
     but the harness itself never requires a GPU, a network, or a real model.
     """
     video_path = Path(video_path)
+    spec = get_platform(platform).format_spec
+    want_width, want_height = spec.width, spec.height
+    hero_cap = _hero_cap_s(spec.duration_band_s)
     checks: list[dict[str, Any]] = []
     reasons: list[str] = []
 
@@ -185,22 +221,22 @@ def verify_render(
     elif exists:
         try:
             width, height, duration = _probe_dimensions_duration(video_path)
-            dims_ok = width == TARGET_WIDTH and height == TARGET_HEIGHT
+            dims_ok = width == want_width and height == want_height
             checks.append(
                 {
                     "check": "dimensions",
                     "result": "pass" if dims_ok else "fail",
-                    "reason": f"{width}x{height} (want {TARGET_WIDTH}x{TARGET_HEIGHT})",
+                    "reason": f"{width}x{height} (want {want_width}x{want_height})",
                 }
             )
             if not dims_ok:
-                reasons.append(f"dimensions {width}x{height} != 1080x1920")
-            dur_ok = 0.0 < duration <= MAX_HERO_DURATION_S
+                reasons.append(f"dimensions {width}x{height} != {want_width}x{want_height}")
+            dur_ok = 0.0 < duration <= hero_cap
             checks.append(
                 {
                     "check": "duration",
                     "result": "pass" if dur_ok else "fail",
-                    "reason": f"{duration:.2f}s (want 0 < d <= {MAX_HERO_DURATION_S})",
+                    "reason": f"{duration:.2f}s (want 0 < d <= {hero_cap:g})",
                 }
             )
             if not dur_ok:
