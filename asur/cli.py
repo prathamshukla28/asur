@@ -22,6 +22,7 @@ from pathlib import Path
 
 from .core.gate import HOLD, SHIP
 from .core.identity import get_identity
+from .core.media_workspace import MediaWorkspace
 from .core.workspace import Workspace, WorkspaceError
 from .orchestrator import Orchestrator
 from .script.audience import build_audience
@@ -307,12 +308,13 @@ def _run_render(args: argparse.Namespace) -> int:
         return 1
 
     subject = str(edit_plan.body.get("subject", "") or project_id)
+    render_dir = MediaWorkspace(project_root, project_id).ensure().base / "render"
     try:
         render = build_final_render(
             edit_plan,
             project_id,
             platform=args.platform,
-            out_root=project_root,
+            out_root=str(render_dir),
             identity=identity,
         )
         _emit_stage(ws, render, f"rendered real MP4 ({render.body['provenance']['resolution']})")

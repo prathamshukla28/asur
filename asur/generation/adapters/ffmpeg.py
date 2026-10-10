@@ -162,6 +162,7 @@ def _render_card(
     height: int,
     fps: int,
     caption: str = "",
+    skipped: list[int] | None = None,
 ) -> Path:
     """Render ONE solid-colour card at the given resolution/fps (deterministic).
 
@@ -191,6 +192,13 @@ def _render_card(
         str(out),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    if caption and proc.returncode != 0 and "No such filter: 'drawtext'" in (proc.stderr or ""):
+        # This ffmpeg build has no libfreetype. Render the card clean and record
+        # the skip so provenance never claims text that is not on screen
+        # (ASUR-HONEST-01) instead of failing the whole render.
+        if skipped is not None:
+            skipped.append(index)
+        return _render_card(index, seconds, work, width=width, height=height, fps=fps)
     if proc.returncode != 0 or not out.is_file():
         raise RenderError(f"ffmpeg card render failed (scene {index}): {proc.stderr[-400:]}")
     return out
@@ -280,7 +288,7 @@ def render(
             "(fail closed, ASUR-GATE-01)"
         )
     captions = _scene_captions(tl)
-    captions_burned_in = any(captions)
+    skipped: list[int] = []
 
     audio = Path(audio_path) if audio_path else None
     audio_present = audio is not None and audio.is_file()
@@ -301,12 +309,20 @@ def render(
                 height=height,
                 fps=fps,
                 caption=captions[i] if i < len(captions) else "",
+                skipped=skipped,
             )
             for i, dur in enumerate(durations)
         ]
         _concat(cards, out, work, audio_path=audio)
 
     total_s = round(sum(durations), 3)
+    captions_burned_in = any(c for i, c in enumerate(captions) if i not in skipped)
+    captions_skipped_reason = (
+        "ffmpeg build lacks the drawtext filter (libfreetype); "
+        f"{len(skipped)} caption card(s) rendered clean"
+        if skipped
+        else None
+    )
     return {
         "media_type": MEDIA_TYPE,
         "origin": "procedural",
@@ -320,6 +336,7 @@ def render(
             "resolution": f"{width}x{height}",
             "duration_s": total_s,
             "captions_burned_in": captions_burned_in,
+            "captions_skipped_reason": captions_skipped_reason,
             "audio_present": audio_present,
             "note": (
                 f"deterministic solid-colour {spec.aspect_ratio} cards; "
