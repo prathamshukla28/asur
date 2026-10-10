@@ -86,16 +86,24 @@ def run_job(job: dict[str, Any], *, timeline: Any = None, out_dir: str) -> dict[
 
     # FFmpeg renders a timeline; image adapters write a PNG to out_path; audio
     # adapters take text. We pass what each shape needs and let the adapter
-    # raise if its extra is absent (NOTE: target is the asset ref today; real
-    # screenplay scene text is a crude-prompt gap tracked in DEFERRED.md).
+    # raise if its extra is absent. The AI adapters are prompted with the real
+    # screenplay-derived params['prompt'] (G26), falling back to the asset ref
+    # when a plan was built without a screenplay (preserves old behaviour).
+    params = job.get("params", {})
+    prompt = params.get("prompt") or target
     if model == "FFmpeg":
         result = adapter(timeline, out_path)
     elif media_type == "image":
-        result = adapter(target, out_path)
+        result = adapter(prompt, out_path)
     elif media_type == "audio_voice":
-        result = adapter(target, voice=job.get("params", {}).get("voice", "default"))
+        result = adapter(prompt, out_path, voice=params.get("voice", "default"))
+    elif media_type == "audio_music":
+        result = adapter(prompt, out_path, seconds=float(params.get("seconds", 10.0)))
+    elif media_type == "captions":
+        # faster-whisper takes an INPUT audio path, not an out_path (see DEFERRED.md).
+        result = adapter(target, language=params.get("language", "en"))
     else:
-        result = adapter(target)
+        result = adapter(prompt)
 
     out: dict[str, Any] = dict(result)
     out["job_id"] = job.get("job_id")

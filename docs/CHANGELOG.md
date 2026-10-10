@@ -9,6 +9,32 @@ gate.
 
 ## [Unreleased]
 
+### Added — P11a (real screenplay prompts into generation jobs + AI adapter baseline)
+- **Prompt threading** (SPEC-GAP **G26**): `build_generation_plan`
+  (`asur/asur/generation/generation_plan.py`) gains an optional keyword-only
+  `visual_screenplay_artifact=`. When supplied, each AI job carries a real prompt
+  derived **only from authored screenplay fields** (never invented, §7): image
+  backgrounds use `visual_concept + semantic_metaphor + composition`, the voice track
+  uses the joined `spoken_content`, the music bed uses `audio_direction`. On-screen-text
+  jobs get no AI prompt. Omitting the screenplay produces byte-identical output
+  (ASUR-VERSION-01) — all existing callers are unaffected.
+- **Dispatcher wiring** (SPEC-GAP **G26**): `dispatch.run_job`
+  (`asur/asur/generation/dispatch.py`) now hands `params['prompt']` to the SDXL / Kokoro /
+  Stable Audio adapters instead of the raw asset-ref string; the asset-ref fallback is
+  preserved when no prompt is present. The FFmpeg and captions branches are unchanged.
+- **Real AI adapters landed as baseline**: the Kokoro voice (`adapters/kokoro.py`),
+  Stable Audio music (`adapters/stable_audio.py`), and faster-whisper caption
+  (`adapters/faster_whisper.py`) adapters are real, lazy-import, fail-closed
+  implementations (they `RuntimeError` without the `asur[generation]` extra and their
+  real-run lines are `# pragma: no cover`). `DEFERRED.md` corrected: the crude-prompt row
+  removed, the stub rows for SDXL/Kokoro/Stable Audio/faster-whisper corrected to REAL
+  (only Wan 2.2 AI video and the OTIO interchange remain stubs).
+- **Tests** (`tests/test_generation_prompt_p11.py`, 7 tests, tests-first/RED-confirmed):
+  plan without screenplay is byte-identical; image job prompt is real screenplay intent
+  (not the asset ref); voice prompt is spoken content; music prompt is audio direction;
+  on-screen-text jobs have no AI prompt; `run_job` passes the real prompt to the adapter
+  and falls back to the asset ref without one. Full suite **316 passed, 8 deselected**.
+
 ### Added — P10c (ready-to-upload package + thumbnail + `asur render` CLI)
 - **`materialize_package`** (`asur/asur/learning/publish_package.py`): writes the
   ready-to-upload file set into the browsable per-project media workspace

@@ -22,22 +22,24 @@ The pattern is borrowed from the sibling Trinity project's `DEFERRED.md`.
 
 ASUR plans the whole video (idea -> script -> creative direction -> visual
 screenplay -> asset plan -> generation plan -> timeline) and now renders a
-**real** video. But only one of the six generation adapters actually produces
-media.
+**real** video. Five of the six generation adapters now carry real, wired
+bodies; only AI video (Wan 2.2) and the OTIO interchange remain stubs.
 
-| Adapter | Status today | What would make it real |
+| Adapter | Status today | What remains |
 | --- | --- | --- |
-| `generation/adapters/ffmpeg.py` | **REAL.** Renders true 1080x1920 H.264 pixels from the timeline via the local `ffmpeg` binary (solid-colour procedural cards for now). No model, no GPU, no network. Returns provenance + license. | Nothing — it works. Richer visuals come from the image/audio adapters below feeding the same concat path. |
-| `generation/adapters/sdxl.py` (images) | **STUB.** Raises `RuntimeError` ("needs the generation extra") then `NotImplementedError` ("human-run, local-only step"). | Add `torch`/`diffusers` to the generation extra; wire the lazy body; run locally on a machine with a GPU/MPS. Deliberately a human-run local step (G10: no GPU/no network in CI). |
-| `generation/adapters/kokoro.py` (voice) | **STUB.** Same two-stage raise. | Add `kokoro` + `espeak-ng`; wire the lazy body; run locally. |
-| `generation/adapters/stable_audio.py` (music) | **STUB.** Same. | Add `stable_audio_tools`; wire + run locally. |
-| `generation/adapters/wan22.py` (AI video) | **STUB.** Same. | Add `torch`; needs a real GPU; run locally. |
-| `generation/adapters/faster_whisper.py` (captions) | **STUB in this path.** (The standalone `edit_video.py` already uses faster-whisper directly.) | Wire the adapter body; `faster-whisper` is already in the extra. |
+| `generation/adapters/ffmpeg.py` | **REAL.** Renders true 1080x1920 H.264 pixels from the timeline via the local `ffmpeg` binary (solid-colour procedural cards + burned-in captions + optional audio mux). No model, no GPU, no network. Returns provenance + license. | Nothing — it works. Richer visuals come from the image/audio adapters below feeding the same concat path (P11b compositing). |
+| `generation/adapters/sdxl.py` (images) | **REAL (human-run local-only).** Lazy-imports `torch`/`diffusers`/`PIL`; generates a 1080x1920 portrait PNG on MPS/CUDA/CPU; returns provenance + license. Fails closed with `RuntimeError` if the generation extra is absent. Real-run lines are `# pragma: no cover` (G10: no GPU/no network in CI). | Deps still unpinned in the extra (§2); compositing the PNG into the render (P11b). |
+| `generation/adapters/kokoro.py` (voice) | **REAL (human-run local-only).** Lazy-imports `kokoro`/`numpy`/`soundfile`; synthesises a 24 kHz WAV; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. | Deps unpinned (§2); mux into the render (P11b). |
+| `generation/adapters/stable_audio.py` (music) | **REAL (human-run local-only).** Lazy-imports `torch`/`torchaudio`/`stable_audio_tools`; generates a 44.1 kHz stereo WAV; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. | Deps unpinned (§2); mux into the render (P11b). |
+| `generation/adapters/faster_whisper.py` (captions) | **REAL (human-run local-only).** Lazy-imports `faster_whisper`; transcribes audio with deterministic greedy decoding + word timestamps; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. | Deps: `faster-whisper` is already in the extra. |
+| `generation/adapters/wan22.py` (AI video) | **STUB.** Lazy-imports `torch` then raises `NotImplementedError` ("human-run, local-only GPU step"). | Add `torch`; needs a real GPU; run locally. Deferred past P11 (SPEC-GAP G29). |
 | `editing/adapters/otio.py` (timeline interchange) | **STUB.** `to_otio`/`from_otio` raise `NotImplementedError`. | Wire against `opentimelineio` (in the extra). Not needed for a render — FFmpeg renders straight from the timeline. |
 
-So: **a full idea -> real .mp4 works offline today**, but the scenes are
-procedural colour cards, not AI imagery/voice/music. Those are a deliberate,
-honest, human-run local-only upgrade — not something CI pretends to do.
+So: **a full idea -> real .mp4 works offline today** with procedural colour
+cards. The real AI imagery/voice/music adapters are now wired but are a
+deliberate, honest, human-run local-only upgrade (they fail closed without the
+`asur[generation]` extra and never run in CI) — not something CI pretends to
+do. Compositing their output into the render is P11b.
 
 ---
 
@@ -45,24 +47,14 @@ honest, human-run local-only upgrade — not something CI pretends to do.
 
 `pyproject.toml` `[project.optional-dependencies].generation` lists only
 `moviepy`, `faster-whisper`, `librosa`, `opentimelineio` (all unpinned).
-Missing for the stubbed adapters above: `torch`, `diffusers`, `kokoro`,
-`stable_audio_tools`. Needs: add them (pinned) in the same change that wires
-the first real SDXL/Kokoro adapter.
+Missing for the now-real adapters above: `torch`, `diffusers`, `transformers`,
+`accelerate`, `safetensors`, `Pillow`, `kokoro`, `soundfile`, `numpy`,
+`stable_audio_tools`, `torchaudio`. Needs: add them (pinned) — scheduled for
+P11c alongside the compositing path (SPEC-GAP G28).
 
 ---
 
-## 3. Dispatcher prompt-sourcing is crude
-
-`generation/dispatch.py` `run_job` passes the `timeline` to the FFmpeg adapter
-(correct) but passes the **asset_ref string** as the prompt/text to every
-other adapter. A real SDXL/Kokoro run needs the actual scene text (spoken
-words, visual concept, hero words) from the visual screenplay, not the asset
-id. Needs: thread the screenplay scene into the job and hand the real prompt
-to the adapter when the image/voice adapters go live.
-
----
-
-## 4. Enforcement that is partial or human-only
+## 3. Enforcement that is partial or human-only
 
 | Obligation | Stated in | Enforced today | Needs |
 | --- | --- | --- | --- |
@@ -73,7 +65,7 @@ to the adapter when the image/voice adapters go live.
 
 ---
 
-## 5. Known open SPEC-GAP
+## 4. Known open SPEC-GAP
 
 **G15** — `part1` / `part2` / `part3` at the parent directory are 0-byte files.
 They are flagged and ignored; they are not inputs. Open only in the sense that
