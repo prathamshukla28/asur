@@ -198,12 +198,19 @@ def build_timeline_from_generation_plan(
 
     scenes = sp.get("scenes", [])
     scene_spans: dict[str, tuple[float, float]] = {}
+    # Map scene_id -> the real on-screen text the screenplay already authored.
+    # This is the ONLY text ever eligible to be burned in as a caption: never a
+    # section label or any invented string (ASUR-HONEST-01, anti-hallucination §7).
+    onscreen_text: dict[str, str] = {}
     tl_scenes: list[dict] = []
     for scene in scenes:
         sid = scene.get("scene_id", "")
         start = float(scene.get("start", 0.0))
         end = float(scene.get("end", 0.0))
         scene_spans[sid] = (start, end)
+        text = scene.get("graphics", {}).get("onscreen_text", "")
+        if text:
+            onscreen_text[sid] = text
         tl_scenes.append({"scene_id": sid, "start": start, "end": end})
 
     duration = max((end for (_, end) in scene_spans.values()), default=0.0)
@@ -231,6 +238,19 @@ def build_timeline_from_generation_plan(
             clip.out_point = duration
             music_track.clips.append(clip)
         elif media_type == "graphic" or asset_ref.endswith("-onscreen-text"):
+            _SUFFIX = "-onscreen-text"
+            scene_id = asset_ref[: -len(_SUFFIX)] if asset_ref.endswith(_SUFFIX) else ""
+            caption = onscreen_text.get(scene_id, "")
+            if caption:
+                clip.overlays.append(
+                    {
+                        "type": "caption",
+                        "text": caption,
+                        "start": start,
+                        "end": end,
+                        "y_fraction": 0.78,
+                    }
+                )
             text_track.clips.append(clip)
         else:
             video_track.clips.append(clip)

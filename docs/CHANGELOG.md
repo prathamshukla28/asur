@@ -9,6 +9,28 @@ gate.
 
 ## [Unreleased]
 
+### Added — P10b-captions (burned-in captions + optional audio mux)
+- **Caption burn-in** (`asur/asur/editing/timeline.py` +
+  `asur/asur/generation/adapters/ffmpeg.py`): the authored on-screen text from the
+  visual screenplay (`scenes[].graphics.onscreen_text`) is threaded onto the matching
+  text-track clip's `overlays` in `build_timeline_from_generation_plan`, then burned
+  into the render via an FFmpeg `drawtext` filter positioned in the caption safe area
+  (y-fraction 0.78, matching `editing/captions.py`). **Only authored text is ever
+  burned** — never a section label or invented string (ASUR-HONEST-01, §7
+  anti-hallucination). Scenes with no authored caption render as clean cards,
+  byte-identical to the pre-caption output (ASUR-VERSION-01).
+- **Optional audio mux** (same adapter): `render(..., audio_path=None)` muxes a voice
+  or music track into the output **only when a real audio file exists on disk**; absent
+  or missing file ⇒ a silent render with no fabricated track (user decision: placeholder
+  audio only, real AI voice/music via Kokoro/Stable Audio deferred to P11).
+- **Provenance booleans** (same adapter): the render provenance now records
+  `captions_burned_in` and `audio_present` so each rendered asset honestly states what
+  was composited (ASUR-PROV-01, ASUR-EXPLAIN-01).
+- **Tests** (`tests/test_render_captions_p10.py`, 8 tests, tests-first/RED-confirmed):
+  overlays carry only real on-screen text with safe-area timing; render burns the real
+  caption text; no overlays ⇒ no `drawtext`; resolution unchanged with captions; audio
+  muxed only when a real file exists. Full suite **301 passed, 8 deselected**.
+
 ### Added — P10b (real timeline render — platform-aware FFmpeg adapter + build_final_render)
 - **Platform-aware render** (`asur/asur/generation/adapters/ffmpeg.py`):
   `render(timeline, out_path, *, platform=None)` now reads resolution and fps from

@@ -54,6 +54,13 @@ _PALETTE = (
 _MIN_SCENE_S = 1.0
 _DEFAULT_SCENE_S = 3.0
 
+# Caption safe-area vertical anchor as a fraction of frame height. 0.78 matches
+# the editing layer default (asur.editing.captions.style_caption y_fraction=0.78)
+# and sits inside the 0.12..0.88 readable band for every pack's safe_area.
+_CAPTION_Y_FRACTION = 0.78
+# drawtext box styling: white text, semi-opaque dark box, centred horizontally.
+_CAPTION_FONT_SIZE_DIVISOR = 22  # font size = frame height // divisor
+
 
 class RenderError(RuntimeError):
     """Raised when the ffmpeg binary is missing or a render command fails."""
@@ -62,6 +69,68 @@ class RenderError(RuntimeError):
 def _ffmpeg_available() -> bool:
     """True only if the ffmpeg binary is on PATH (no network/GPU, no import)."""
     return shutil.which("ffmpeg") is not None
+
+
+def _scene_captions(timeline: dict[str, Any]) -> list[str]:
+    """One caption string per scene index, sourced ONLY from authored overlays.
+
+    Reads the text track's clip overlays (threaded from the screenplay's authored
+    ``onscreen_text`` in ``build_timeline_from_generation_plan``). A caption is
+    burned only when a text-track clip's ``timeline_start`` lines up with a scene's
+    ``start`` AND that clip carries a ``caption`` overlay. No overlay => empty
+    string => a clean card with no text (ASUR-HONEST-01 / anti-hallucination §7:
+    never invent on-screen words; only authored text is ever drawn).
+    """
+    scenes = timeline.get("scenes") or []
+    # Map scene start time -> caption text from text-track overlays.
+    by_start: dict[float, str] = {}
+    for track in timeline.get("tracks", []):
+        if track.get("type") != "text":
+            continue
+        for clip in track.get("clips", []):
+            for overlay in clip.get("overlays", []):
+                if overlay.get("type") != "caption":
+                    continue
+                text = str(overlay.get("text", "")).strip()
+                if not text:
+                    continue
+                start = float(overlay.get("start", clip.get("timeline_start", 0.0)) or 0.0)
+                by_start.setdefault(round(start, 3), text)
+    captions: list[str] = []
+    for scene in scenes:
+        start = round(float(scene.get("start", 0.0) or 0.0), 3)
+        captions.append(by_start.get(start, ""))
+    return captions
+
+
+def _escape_drawtext(text: str) -> str:
+    """Escape a caption string for an ffmpeg drawtext ``text=`` value.
+
+    drawtext treats ``\\``, ``:``, ``'``, and ``%`` specially; a filtergraph also
+    splits on unescaped commas. Escape conservatively so the real authored words
+    render verbatim (no invention, no silent truncation).
+    """
+    out = text.replace("\\", "\\\\")
+    out = out.replace(":", "\\:")
+    out = out.replace("'", "\\'")
+    out = out.replace("%", "\\%")
+    out = out.replace(",", "\\,")
+    return out
+
+
+def _drawtext_filter(text: str, *, height: int) -> str:
+    """Build a centred, safe-area drawtext filter for one card's caption."""
+    font_size = max(height // _CAPTION_FONT_SIZE_DIVISOR, 12)
+    y_px = round(height * _CAPTION_Y_FRACTION)
+    escaped = _escape_drawtext(text)
+    # x centres the box; y sits on the safe-area anchor; a translucent box keeps
+    # white text legible over any card colour.
+    return (
+        f"drawtext=text='{escaped}'"
+        f":fontcolor=white:fontsize={font_size}"
+        ":box=1:boxcolor=black@0.5:boxborderw=12"
+        f":x=(w-text_w)/2:y={y_px}"
+    )
 
 
 def _scene_durations(timeline: dict[str, Any]) -> list[float]:
@@ -85,9 +154,21 @@ def _scene_durations(timeline: dict[str, Any]) -> list[float]:
 
 
 def _render_card(
-    index: int, seconds: float, work: Path, *, width: int, height: int, fps: int
+    index: int,
+    seconds: float,
+    work: Path,
+    *,
+    width: int,
+    height: int,
+    fps: int,
+    caption: str = "",
 ) -> Path:
-    """Render ONE solid-colour card at the given resolution/fps (deterministic)."""
+    """Render ONE solid-colour card at the given resolution/fps (deterministic).
+
+    When ``caption`` is non-empty, the authored text is burned into the safe area
+    via a drawtext video filter; an empty caption renders a clean card (identical
+    to the pre-caption output), so a timeline with no overlays is byte-identical.
+    """
     colour = _PALETTE[index % len(_PALETTE)]
     out = work / f"scene_{index:03d}.mp4"
     cmd = [
@@ -97,6 +178,10 @@ def _render_card(
         "lavfi",
         "-i",
         f"color=c={colour}:s={width}x{height}:r={fps}:d={seconds:.3f}",
+    ]
+    if caption:
+        cmd += ["-vf", _drawtext_filter(caption, height=height)]
+    cmd += [
         "-c:v",
         "libx264",
         "-preset",
@@ -111,11 +196,16 @@ def _render_card(
     return out
 
 
-def _concat(cards: list[Path], out_path: Path, work: Path) -> None:
+def _concat(
+    cards: list[Path], out_path: Path, work: Path, *, audio_path: Path | None = None
+) -> None:
     """Join per-scene cards into the final MP4 via the concat demuxer.
 
     Abs paths need ``-safe 0``. The concat-demuxer re-encodes here (simple,
     robust across mismatched inputs); ``+faststart`` makes the file web-ready.
+    When ``audio_path`` is given it is muxed as a second input and trimmed to the
+    video length (``-shortest``); absent it, the output is silent (no fabricated
+    track).
     """
     listing = work / "concat.txt"
     # concat demuxer wants: file '<abs path>' per line (quotes handle spaces).
@@ -129,6 +219,10 @@ def _concat(cards: list[Path], out_path: Path, work: Path) -> None:
         "0",
         "-i",
         str(listing),
+    ]
+    if audio_path is not None:
+        cmd += ["-i", str(audio_path)]
+    cmd += [
         "-c:v",
         "libx264",
         "-preset",
@@ -137,15 +231,22 @@ def _concat(cards: list[Path], out_path: Path, work: Path) -> None:
         "yuv420p",
         "-movflags",
         "+faststart",
-        str(out_path),
     ]
+    if audio_path is not None:
+        cmd += ["-c:a", "aac", "-shortest"]
+    cmd += [str(out_path)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
     if proc.returncode != 0 or not out_path.is_file():
         raise RenderError(f"ffmpeg concat failed: {proc.stderr[-400:]}")
 
 
 def render(
-    timeline: Any, out_path: str, *, platform: str | None = None, **params: Any
+    timeline: Any,
+    out_path: str,
+    *,
+    platform: str | None = None,
+    audio_path: str | None = None,
+    **params: Any,
 ) -> dict[str, Any]:
     """Render a Timeline (dict or ``.to_dict()``-able) to a real MP4 file.
 
@@ -178,16 +279,32 @@ def render(
             "timeline declares an empty scene list; nothing to render "
             "(fail closed, ASUR-GATE-01)"
         )
+    captions = _scene_captions(tl)
+    captions_burned_in = any(captions)
+
+    audio = Path(audio_path) if audio_path else None
+    audio_present = audio is not None and audio.is_file()
+    if not audio_present:
+        audio = None
+
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="asur_render_") as tmp:
         work = Path(tmp)
         cards = [
-            _render_card(i, dur, work, width=width, height=height, fps=fps)
+            _render_card(
+                i,
+                dur,
+                work,
+                width=width,
+                height=height,
+                fps=fps,
+                caption=captions[i] if i < len(captions) else "",
+            )
             for i, dur in enumerate(durations)
         ]
-        _concat(cards, out, work)
+        _concat(cards, out, work, audio_path=audio)
 
     total_s = round(sum(durations), 3)
     return {
@@ -202,6 +319,8 @@ def render(
             "fps": fps,
             "resolution": f"{width}x{height}",
             "duration_s": total_s,
+            "captions_burned_in": captions_burned_in,
+            "audio_present": audio_present,
             "note": (
                 f"deterministic solid-colour {spec.aspect_ratio} cards; "
                 "no model, no network, no GPU"
