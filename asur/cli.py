@@ -257,6 +257,111 @@ def _run_viral_check(args: argparse.Namespace) -> int:
     return _run_not_yet("viral-check", "VIRAL CHECK", "Phase 7")
 
 
+def _run_render(args: argparse.Namespace) -> int:
+    """Render an approved edit plan into a real, browsable, ready-to-upload package.
+
+    Loads the latest edit_plan + viral_check artifacts, renders a real
+    platform-sized MP4 (FFmpeg, the LOCKED renderer), assembles the publish
+    package, and writes the DATA_MODELS file set into a browsable
+    ``youtube/<project_id>/package/`` folder. It STOPS at the publish human
+    gate (stage 25, ASUR-HUMAN-01): it produces files on disk, it never posts.
+    Missing inputs or a missing FFmpeg binary fail closed to HOLD (ASUR-GATE-01).
+    """
+    # Imported here (not at module load) so the stdlib-only front door stays
+    # importable without the generation media path on the import graph.
+    from .generation.render import RenderError, build_final_render
+    from .learning.publish_package import build_publish_package, materialize_package
+
+    resolved = _resolve_project(args)
+    if isinstance(resolved, int):
+        return resolved
+    project_root, project_id = resolved
+    identity = get_identity()
+
+    try:
+        ws = Workspace(project_root, project_id).ensure()
+    except WorkspaceError as exc:
+        _emit(f"error: could not open workspace: {exc}")
+        return 2
+
+    edit_plan = ws.load_latest("edit_plan")
+    viral_check = ws.load_latest("viral_check")
+
+    _emit("ASUR RENDER - real local render + ready-to-upload package")
+    _emit(f"  project  : {project_id}")
+    _emit(f"  platform : {args.platform}")
+    _emit(f"  creator  : {identity.principal()}")
+    _emit()
+
+    if edit_plan is None:
+        _emit(f"  disposition : {HOLD} (NO_EDIT_PLAN)")
+        _emit()
+        _emit("No approved edit_plan artifact found in this project's workspace.")
+        _emit("Build the pipeline through EDITING first; render fails closed.")
+        return 1
+    if viral_check is None:
+        _emit(f"  disposition : {HOLD} (NO_VIRAL_CHECK)")
+        _emit()
+        _emit("No viral_check artifact found in this project's workspace.")
+        _emit("The viral check must run before a package is assembled; fails closed.")
+        return 1
+
+    subject = str(edit_plan.body.get("subject", "") or project_id)
+    try:
+        render = build_final_render(
+            edit_plan,
+            project_id,
+            platform=args.platform,
+            out_root=project_root,
+            identity=identity,
+        )
+        _emit_stage(ws, render, f"rendered real MP4 ({render.body['provenance']['resolution']})")
+
+        publish = build_publish_package(
+            edit_plan,
+            viral_check,
+            project_id,
+            title=subject,
+            caption=subject,
+            platform=args.platform,
+            identity=identity,
+        )
+        _emit_stage(ws, publish, "assembled publish package (metadata only)")
+
+        package = materialize_package(
+            publish,
+            render,
+            project_id,
+            out_root=project_root,
+            identity=identity,
+        )
+    except RenderError as exc:
+        _emit()
+        _emit(f"  disposition : {HOLD} (RENDER_UNAVAILABLE)")
+        _emit(f"  reason      : {exc}")
+        _emit()
+        _emit("Render failed closed - no partial package was written.")
+        return 1
+    except WorkspaceError as exc:
+        _emit()
+        _emit(f"error: workspace refused a write (fail-closed): {exc}")
+        return 2
+    except ValueError as exc:
+        _emit()
+        _emit(f"error: a stage rejected its input: {exc}")
+        return 2
+
+    _emit()
+    _emit("Ready-to-upload package written (browsable on disk):")
+    _emit(f"  folder : {package['folder']}")
+    for path in package["files"]:
+        _emit(f"    - {path.name}")
+    _emit()
+    _emit("Result: files are ready. ASUR never posts - a human uploads them")
+    _emit("(publish is human gate stage 25, ASUR-HUMAN-01).")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="asur",
@@ -319,6 +424,19 @@ def build_parser() -> argparse.ArgumentParser:
     vc_p.add_argument("--project", default=".", help="Project directory. Default: current dir.")
     vc_p.add_argument("--project-id", default=None, help="Explicit project id. Default: dir name.")
     vc_p.set_defaults(func=_run_viral_check)
+
+    render_p = sub.add_parser(
+        "render",
+        help="Render an approved edit plan into a real MP4 + ready-to-upload package (local).",
+    )
+    render_p.add_argument("--project", default=".", help="Project directory. Default: current dir.")
+    render_p.add_argument("--project-id", default=None, help="Explicit project id. Default: dir name.")
+    render_p.add_argument(
+        "--platform",
+        default="instagram_reels",
+        help="Target platform (instagram_reels|youtube_shorts|youtube_long). Default: instagram_reels.",
+    )
+    render_p.set_defaults(func=_run_render)
 
     return parser
 

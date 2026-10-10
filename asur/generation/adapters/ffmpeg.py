@@ -332,3 +332,60 @@ def render(
             "note": "FFmpeg is a tool; output of procedural colour cards is unencumbered",
         },
     }
+
+
+def grab_thumbnail(
+    video_path: str,
+    out_path: str,
+    *,
+    timestamp_s: float = 0.0,
+) -> dict[str, Any]:
+    """Extract ONE still frame from a rendered MP4 as the upload thumbnail (G23).
+
+    Zero new dependencies and no AI: a single ffmpeg frame-grab at the given
+    timestamp (the hero/payoff moment of the real render). Fails closed
+    (``RenderError``) when the ffmpeg binary is absent or the grab produces no
+    file (ASUR-GATE-01). Returns a provenance+license block (ASUR-PROV-01) whose
+    origin is ``ffmpeg-framegrab`` and which records the exact source video and
+    timestamp, so the thumbnail is never a black box.
+    """
+    if not _ffmpeg_available():
+        raise RenderError(
+            "FFmpeg adapter needs the ffmpeg binary on PATH to grab a thumbnail "
+            "(brew install ffmpeg / apt install ffmpeg)."
+        )
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-ss",
+        f"{timestamp_s:.3f}",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        str(out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    if proc.returncode != 0 or not out.is_file():
+        raise RenderError(f"ffmpeg thumbnail grab failed: {proc.stderr[-400:]}")
+    return {
+        "media_type": "image",
+        "origin": "ffmpeg-framegrab",
+        "file_path": str(out),
+        "provenance": {
+            "model": MODEL,
+            "model_version": "ffmpeg-binary",
+            "origin": "ffmpeg-framegrab",
+            "timestamp_s": round(float(timestamp_s), 3),
+            "source_video": str(video_path),
+            "render_cost_usd": 0,
+            "note": "single frame grabbed from the real render; no model, no network, no GPU",
+        },
+        "license": {
+            "name": LICENSE,
+            "commercial_ok": True,
+            "note": "frame of a procedural colour-card render; unencumbered",
+        },
+    }

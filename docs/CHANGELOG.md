@@ -9,6 +9,38 @@ gate.
 
 ## [Unreleased]
 
+### Added — P10c (ready-to-upload package + thumbnail + `asur render` CLI)
+- **`materialize_package`** (`asur/asur/learning/publish_package.py`): writes the
+  ready-to-upload file set into the browsable per-project media workspace
+  (`<root>/youtube/<project_id>/package/`) via `MediaWorkspace` (O_EXCL, append-only,
+  versioned `vNNNN-` filenames — re-running never overwrites, ASUR-VERSION-01). The
+  file set adopts `docs/spec/DATA_MODELS.md` L132 as authoritative (SPEC-GAP **G22**):
+  `final-video.mp4`, `thumbnail.jpg`, `title.txt`, `description.txt`, `tags.txt`,
+  `platform-metadata.json`, `content-report.json`. Fails closed (`RenderError`) when the
+  render artifact has no real video on disk (ASUR-GATE-01).
+- **Thumbnail frame-grab** (`asur/asur/generation/adapters/ffmpeg.py`): new
+  `grab_thumbnail(video_path, out_path, *, timestamp_s=0.0)` extracts a single frame from
+  the real render with FFmpeg (zero new dependencies, no AI model, SPEC-GAP **G23**) and
+  carries provenance `origin: ffmpeg-framegrab` + a license block (ASUR-PROV-01).
+- **`content-report.json`** (SPEC-GAP **G25**): an honest explainability digest —
+  artifact lineage (ids + checksums for the publish and render artifacts), the
+  viral-check verdict **as recorded** (a label, never a "%" score, ASUR-HONEST-01), the
+  render provenance and probed resolution, `content_category`, and `experiment_id`
+  (null when no learning experiment). No invented metrics; verified to contain no "%"
+  character anywhere.
+- **`asur render` CLI** (`asur/asur/cli.py`): new `asur render --project <id>
+  [--platform instagram_reels|youtube_shorts|youtube_long]` renders the latest approved
+  edit plan into a real MP4, assembles the publish package, materializes the upload
+  folder, and prints its path. Fails closed with `HOLD` when no edit plan or viral check
+  exists. **It stops at the publish human gate (stage 25) and never posts** — a human
+  uploads the files (ASUR-HUMAN-01).
+- **Tests** (`tests/test_materialize_p10c.py`, 8 tests, tests-first/RED-confirmed): exact
+  authoritative file set; files live in the browsable youtube folder; thumbnail is an
+  FFmpeg frame-grab; content report is honest and contains no "%"; metadata carries
+  platform + title; re-run appends a new version rather than overwriting; fails closed
+  without a real video; long-form description carries chapters. Full suite
+  **309 passed, 8 deselected**.
+
 ### Added — P10b-captions (burned-in captions + optional audio mux)
 - **Caption burn-in** (`asur/asur/editing/timeline.py` +
   `asur/asur/generation/adapters/ffmpeg.py`): the authored on-screen text from the
