@@ -68,6 +68,7 @@ KINDS = (
     "generation_plan",
     "edit_plan",
     "qa_report",
+    "render",
     "viral_check",
     "publish_package",
     "performance",

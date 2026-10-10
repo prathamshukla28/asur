@@ -20,19 +20,56 @@ from ..platforms import get_platform
 from . import source_ref
 
 
+def _as_float(value: object, default: float) -> float:
+    """Coerce a possibly-missing timeline value to float, failing safe to default."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _scene_title(scene_id: str, index: int) -> str:
+    """Derive a human chapter title from a ``scene-NN-<section>`` id.
+
+    Honest derivation only (ASUR-HONEST-01 / §7 anti-hallucination): the title
+    comes from the scene_id's section token, never an invented label. e.g.
+    ``scene-01-hook`` -> ``Hook``. Unparseable ids fall back to the raw id.
+    """
+    parts = str(scene_id).split("-")
+    # "scene-01-hook" -> parts = ["scene", "01", "hook"]; section token is the tail.
+    if len(parts) >= 3:
+        section = "-".join(parts[2:]).strip()
+        if section:
+            return section.replace("_", " ").title()
+    return str(scene_id) or f"Section {index + 1}"
+
+
 def _chapters_from_edit(edit_body: dict) -> list[dict]:
-    clips = edit_body.get("clips")
-    if not isinstance(clips, list):
+    """Build YouTube chapters from the edit plan's timeline scenes.
+
+    The edit_plan body stores scenes under ``body['timeline']['scenes']`` as
+    ``{scene_id, start, end}`` (see editing/timeline.py). Earlier code read a
+    non-existent top-level ``clips`` key, so chapters were always empty (G24).
+    Keeps the ``{start_s, title}`` shape so long-form publish fields and the
+    P09c anchors are unaffected; an edit_body with no timeline yields ``[]``.
+    """
+    timeline = edit_body.get("timeline")
+    if not isinstance(timeline, dict):
+        return []
+    scenes = timeline.get("scenes")
+    if not isinstance(scenes, list):
         return []
     chapters: list[dict] = []
-    cursor = 0.0
-    for index, clip in enumerate(clips):
-        if not isinstance(clip, dict):
+    for index, scene in enumerate(scenes):
+        if not isinstance(scene, dict):
             continue
-        start = clip.get("start_s", cursor)
-        label = clip.get("label") or clip.get("scene_id") or f"Section {index + 1}"
-        chapters.append({"start_s": float(start), "title": str(label)})
-        cursor = float(clip.get("end_s", start))
+        start = _as_float(scene.get("start"), 0.0)
+        title = _scene_title(scene.get("scene_id", ""), index)
+        chapters.append({"start_s": start, "title": title})
     return chapters
 
 

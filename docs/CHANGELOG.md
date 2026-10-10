@@ -9,6 +9,36 @@ gate.
 
 ## [Unreleased]
 
+### Added — P10a (real-render groundwork — media workspace + render kind + chapters fix)
+- **New `render` artifact kind** (`asur/asur/core/envelope.py`): added `render` to
+  the universal-envelope `KINDS` set so a rendered-output artifact can be created
+  through `make_artifact` like any other stage artifact (checksummed, versioned).
+  Unknown kinds still fail closed with `ValueError` (ASUR-GATE-01).
+- **New browsable media workspace** (`asur/asur/core/media_workspace.py`, pure
+  stdlib): `MediaWorkspace(project_root, project_id)` manages a human-browsable
+  `youtube/<project_id>/{render,package,_work}/` tree separate from the JSON
+  artifact store (`.script/`). Writes are **O_EXCL append-only** — `write_text` /
+  `write_bytes` refuse to overwrite an existing file (`MediaWorkspaceError`), and
+  `next_version(subdir, name)` yields `vNNNN-<name>` so nothing is silently
+  overwritten (ASUR-VERSION-01). Only the three known subdirs are writable; any
+  other target fails closed (ASUR-GATE-01). No third-party imports — the stdlib-only
+  core boundary (§4, import-linter) stays intact.
+- **Fixed G24 — long-form chapters were always empty**
+  (`asur/asur/learning/publish_package.py`): `_chapters_from_edit` previously read
+  `edit_body['clips']`, a key `build_edit_plan` never writes, so a real edit plan
+  produced zero chapters. It now reads `edit_body['timeline']['scenes']` (the shape
+  `Timeline.to_dict()` actually emits) and derives each chapter title honestly from
+  the `scene_id` token (no invented labels — §7). Chapter shape `{start_s, title}`
+  is unchanged. The Instagram default pack declares no `description` field, so
+  `_longform_fields` (and thus this helper) is never invoked for Instagram — its
+  package body stays **byte-identical** (ASUR-VERSION-01).
+- **Tests** (`tests/test_render_p10a.py`, 11 new, tests-first / RED-confirmed before
+  code): render kind accepted + unknown rejected; `MediaWorkspace` layout, text/bytes
+  round-trip, overwrite refusal, version bumping, unknown-subdir rejection; chapters
+  populated from a real timeline (9 scenes, sorted, first at 0.0), description embeds
+  `Chapters:`/`00:00`, and Instagram stays byte-identical even with a real timeline.
+  Full suite green once: **284 passed, 6 deselected** (integration, need `ffmpeg`).
+
 ### Added — P09c (YouTube extension — long-form hero proof + long-form publish fields)
 - **Hero proof reads the selected pack** (`asur/asur/generation/hero_proof.py`):
   `build_hero_proof` and `verify_render` now take an optional `platform=` id. The
