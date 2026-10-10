@@ -9,6 +9,49 @@ gate.
 
 ## [Unreleased]
 
+### Added — P10b (real timeline render — platform-aware FFmpeg adapter + build_final_render)
+- **Platform-aware render** (`asur/asur/generation/adapters/ffmpeg.py`):
+  `render(timeline, out_path, *, platform=None)` now reads resolution and fps from
+  the chosen platform pack's `FormatSpec` instead of the hard-coded 1080×1920
+  literal (SPEC-GAP **G20**). `platform=None` resolves to Instagram Reels and stays
+  **byte-identical** at 1080×1920 (ASUR-VERSION-01); `youtube_long` renders 16:9
+  1920×1080. An unknown platform id fails closed via `get_platform`
+  (`UnknownPlatform`) before any work, and the provenance `resolution` string is
+  pack-derived. The solid-colour card scope is unchanged (no AI models yet — those
+  are deferred to P11).
+- **Fail-closed on empty scenes** (same file): a timeline that declares an
+  *explicit* empty `scenes: []` list now raises `RenderError` — an edit plan with
+  nothing to render is a fail, never a silent default card (ASUR-GATE-01). A bare
+  `{}` timeline still falls back to a single default card (it is a minimal valid
+  timeline, not an authored-empty one).
+- **New final-render orchestrator** (`asur/asur/generation/render.py`, stdlib
+  control shell, lazy adapter import keeps the §4 boundary + import-linter green):
+  `build_final_render(edit_plan_artifact, project_id, *, platform=None, out_root,
+  identity=None)` renders the edit plan's timeline through the FFmpeg adapter,
+  structurally verifies the output with the **same** platform, and emits a
+  first-class `render` artifact carrying the adapter's provenance + license block
+  (ASUR-PROV-01) and the verification report (ASUR-EXPLAIN-01). It **fails closed**
+  (`RenderError`) if structural verification reports `fail` (ASUR-GATE-01).
+- **`verify_render` final-render ceiling** (`asur/asur/generation/hero_proof.py`):
+  added an explicit, named `max_duration_s` parameter. The default (`None`) keeps
+  the existing **hero-proof** behaviour (ceiling = hero cap, 5–15s for Instagram),
+  so all P04/P09c callers stay byte-identical. A caller verifying a **full final
+  render** passes the final ceiling explicitly (the platform band's upper bound, or
+  `float('inf')` for an undeclared band) so a legitimately long final video is not
+  failed by the short hero-proof cap. The ceiling is always a named input, never a
+  silently skipped check (ASUR-EXPLAIN-01). This fixes a real bug surfaced by the
+  integration run: a full 60s Instagram render was being failed by the 15s hero cap.
+- **Tests**: `tests/test_render_p10b.py` (8 new unit tests, tests-first /
+  RED-confirmed before code; stdlib-only, no ffmpeg — `subprocess.run` + `ffprobe`
+  monkeypatched): default `platform=None` byte-identical 1080×1920; `youtube_long`
+  16:9; unknown platform fails closed; explicit empty scenes fail closed; no-ffmpeg
+  fails closed; `build_final_render` emits a `render` artifact with provenance +
+  license; youtube_long verifies landscape; verify-`fail` fails closed. Integration
+  (`tests/integration/test_render_pipeline.py`, `pytest -m integration`, opt-in,
+  needs the real ffmpeg binary): `build_final_render` writes a real 1080×1920 .mp4
+  (verify `pass`) and a real 1920×1080 youtube_long .mp4 (dimensions `pass`). Full
+  default suite green once: **293 passed, 8 deselected** (integration, need `ffmpeg`).
+
 ### Added — P10a (real-render groundwork — media workspace + render kind + chapters fix)
 - **New `render` artifact kind** (`asur/asur/core/envelope.py`): added `render` to
   the universal-envelope `KINDS` set so a rendered-output artifact can be created

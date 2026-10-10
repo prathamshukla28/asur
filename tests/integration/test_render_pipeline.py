@@ -10,13 +10,14 @@ while a real-run VIRAL_VIEW still strips quality TARGETS by name
 import pytest
 
 from asur.core.identity import get_identity
-from asur.editing.timeline import build_timeline_from_generation_plan
+from asur.editing.timeline import build_edit_plan, build_timeline_from_generation_plan
 from asur.generation.adapters import ffmpeg
 from asur.generation.asset_strategy import build_asset_plan
 from asur.generation.creative_direction import build_creative_direction
 from asur.generation.dispatch import run_job
 from asur.generation.generation_plan import build_generation_plan
 from asur.generation.hero_proof import verify_render
+from asur.generation.render import build_final_render
 from asur.generation.visual_screenplay import build_visual_screenplay
 from asur.script.audience import build_audience
 from asur.script.hooks import build_hooks
@@ -46,10 +47,12 @@ def chain():
     asset_plan = build_asset_plan(screenplay, PROJECT_ID, identity=ident)
     gen_plan = build_generation_plan(asset_plan, PROJECT_ID, identity=ident)
     timeline = build_timeline_from_generation_plan(gen_plan, screenplay, PROJECT_ID)
+    edit_plan = build_edit_plan(timeline, gen_plan, PROJECT_ID, identity=ident)
     return {
         "screenplay": screenplay,
         "gen_plan": gen_plan,
         "timeline": timeline,
+        "edit_plan": edit_plan,
     }
 
 
@@ -94,6 +97,32 @@ def test_dispatcher_routes_ffmpeg_job_to_a_real_render(chain, tmp_path):
     assert produced.exists() and produced.stat().st_size > 0
     assert result["job_id"] == "job-00-reel"
     assert verify_render(str(produced))["checks"][0]["result"] == "pass"
+
+
+def test_build_final_render_writes_a_real_vertical_mp4(chain, tmp_path):
+    art = build_final_render(
+        chain["edit_plan"], PROJECT_ID, out_root=str(tmp_path)
+    )
+
+    produced = tmp_path / "final-video.mp4"
+    assert produced.exists() and produced.stat().st_size > 0
+    assert art.kind == "render"
+    assert art.body["verify"]["status"] == "pass"
+    assert art.body["provenance"]["resolution"] == "1080x1920"
+    assert art.body["license"]["commercial_ok"] is True
+
+
+def test_build_final_render_youtube_long_is_landscape(chain, tmp_path):
+    art = build_final_render(
+        chain["edit_plan"], PROJECT_ID, platform="youtube_long", out_root=str(tmp_path)
+    )
+
+    produced = tmp_path / "final-video.mp4"
+    assert produced.exists() and produced.stat().st_size > 0
+    assert art.body["provenance"]["resolution"] == "1920x1080"
+    report = verify_render(str(produced), platform="youtube_long")
+    checks = {c["check"]: c["result"] for c in report["checks"]}
+    assert checks["dimensions"] == "pass"
 
 
 def test_firewall_holds_on_a_real_run(chain):

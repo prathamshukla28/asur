@@ -24,10 +24,17 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ...platforms import get_platform
+
 MODEL = "FFmpeg"
 LICENSE = "LGPL/GPL"
 MEDIA_TYPE = "video"
 
+# Instagram-Reels fallback dimensions. A ``platform=None`` render reads these so
+# the default stays byte-identical (ASUR-VERSION-01; G19 "IG reproduced
+# byte-for-byte"). Other platforms read width/height/fps from their FormatSpec
+# via the pack registry (SPEC-GAP G20 - resolution must come from the pack, not
+# a hard-coded 1080x1920 literal).
 TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 FPS = 30
@@ -60,22 +67,27 @@ def _ffmpeg_available() -> bool:
 def _scene_durations(timeline: dict[str, Any]) -> list[float]:
     """One duration per scene from the timeline, clamped to a sane minimum.
 
-    Uses the timeline's ``scenes`` (start/end) when present; falls back to a
-    single default-length card so render never produces a zero-length file.
+    A timeline with NO ``scenes`` key at all falls back to a single default-length
+    card (a bare {} dict is a minimal valid timeline, not an authored-empty one).
+    But an *explicit* empty scene list means "an edit plan was built yet has
+    nothing to render" - that fails closed in ``render`` (ASUR-GATE-01), never a
+    silent default card.
     """
-    scenes = timeline.get("scenes") or []
+    scenes = timeline.get("scenes")
+    if scenes is None:
+        return [_DEFAULT_SCENE_S]
     durations: list[float] = []
     for scene in scenes:
         start = float(scene.get("start", 0.0) or 0.0)
         end = float(scene.get("end", 0.0) or 0.0)
         durations.append(max(end - start, _MIN_SCENE_S))
-    if not durations:
-        durations = [_DEFAULT_SCENE_S]
     return durations
 
 
-def _render_card(index: int, seconds: float, work: Path) -> Path:
-    """Render ONE solid-colour 1080x1920 card to its own mp4 (deterministic)."""
+def _render_card(
+    index: int, seconds: float, work: Path, *, width: int, height: int, fps: int
+) -> Path:
+    """Render ONE solid-colour card at the given resolution/fps (deterministic)."""
     colour = _PALETTE[index % len(_PALETTE)]
     out = work / f"scene_{index:03d}.mp4"
     cmd = [
@@ -84,7 +96,7 @@ def _render_card(index: int, seconds: float, work: Path) -> Path:
         "-f",
         "lavfi",
         "-i",
-        f"color=c={colour}:s={TARGET_WIDTH}x{TARGET_HEIGHT}:r={FPS}:d={seconds:.3f}",
+        f"color=c={colour}:s={width}x{height}:r={fps}:d={seconds:.3f}",
         "-c:v",
         "libx264",
         "-preset",
@@ -132,14 +144,27 @@ def _concat(cards: list[Path], out_path: Path, work: Path) -> None:
         raise RenderError(f"ffmpeg concat failed: {proc.stderr[-400:]}")
 
 
-def render(timeline: Any, out_path: str, **params: Any) -> dict[str, Any]:
+def render(
+    timeline: Any, out_path: str, *, platform: str | None = None, **params: Any
+) -> dict[str, Any]:
     """Render a Timeline (dict or ``.to_dict()``-able) to a real MP4 file.
+
+    Resolution and fps come from the chosen platform pack's ``FormatSpec``
+    (SPEC-GAP G20): ``platform=None`` resolves to the Instagram-Reels default and
+    stays byte-identical at 1080x1920 (ASUR-VERSION-01), while ``youtube_long``
+    renders 16:9 1920x1080. An unknown platform id fails closed via
+    ``get_platform`` (UnknownPlatform) before any work.
 
     Returns a provenance+license block (ASUR-PROV-01) describing the output:
     model, license, media type, the output path, and basic structural facts.
-    Fails closed (``RenderError``) when the ffmpeg binary is absent, so a
-    stdlib-only machine without ffmpeg gets a clear message, never a silent pass.
+    Fails closed (``RenderError``) when the ffmpeg binary is absent and when the
+    timeline declares an explicit empty scene list, so a stdlib-only machine
+    without ffmpeg - or an edit plan with nothing to render - gets a clear
+    message, never a silent pass (ASUR-GATE-01).
     """
+    spec = get_platform(platform).format_spec
+    width, height, fps = spec.width, spec.height, spec.fps
+
     if not _ffmpeg_available():
         raise RenderError(
             "FFmpeg adapter needs the ffmpeg binary on PATH "
@@ -148,12 +173,20 @@ def render(timeline: Any, out_path: str, **params: Any) -> dict[str, Any]:
 
     tl = timeline.to_dict() if hasattr(timeline, "to_dict") else dict(timeline)
     durations = _scene_durations(tl)
+    if not durations:
+        raise RenderError(
+            "timeline declares an empty scene list; nothing to render "
+            "(fail closed, ASUR-GATE-01)"
+        )
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="asur_render_") as tmp:
         work = Path(tmp)
-        cards = [_render_card(i, dur, work) for i, dur in enumerate(durations)]
+        cards = [
+            _render_card(i, dur, work, width=width, height=height, fps=fps)
+            for i, dur in enumerate(durations)
+        ]
         _concat(cards, out, work)
 
     total_s = round(sum(durations), 3)
@@ -166,10 +199,13 @@ def render(timeline: Any, out_path: str, **params: Any) -> dict[str, Any]:
             "model_version": "ffmpeg-binary",
             "render_cost_usd": 0,
             "scene_count": len(durations),
-            "fps": FPS,
-            "resolution": f"{TARGET_WIDTH}x{TARGET_HEIGHT}",
+            "fps": fps,
+            "resolution": f"{width}x{height}",
             "duration_s": total_s,
-            "note": "deterministic solid-colour 9:16 cards; no model, no network, no GPU",
+            "note": (
+                f"deterministic solid-colour {spec.aspect_ratio} cards; "
+                "no model, no network, no GPU"
+            ),
         },
         "license": {
             "name": LICENSE,

@@ -178,10 +178,11 @@ def verify_render(
     video_path: str | Path,
     *,
     platform: str | None = None,
+    max_duration_s: float | None = None,
     caption_timing_path: str | Path | None = None,
     contact_sheet_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Structurally verify an actual rendered hero proof. Offline, model-free.
+    """Structurally verify an actual rendered video. Offline, model-free.
 
     Returns a dict with keys ``status`` (one of ``"pass"``, ``"fail"``,
     ``"skipped"``), ``checks`` (per-check pass/fail/skip + reason), and
@@ -189,11 +190,19 @@ def verify_render(
     ``skipped`` (never ``fail``) so CI without ffmpeg still passes (G10). The
     structural truth is "rendered output is truth" (PIPELINE.md stages 16/20/22)
     but the harness itself never requires a GPU, a network, or a real model.
+
+    ``max_duration_s`` is the upper duration ceiling. The default (``None``)
+    verifies a HERO PROOF: the ceiling is the hero cap (5-15s for Instagram, the
+    pack band upper bound otherwise). A caller verifying a FULL final render
+    passes the final ceiling explicitly (e.g. the platform band's upper bound, or
+    ``float('inf')`` for an undeclared band) so a legitimately long final video is
+    not failed by the short hero-proof cap. The ceiling is always a NAMED input,
+    never a silently skipped check (ASUR-EXPLAIN-01).
     """
     video_path = Path(video_path)
     spec = get_platform(platform).format_spec
     want_width, want_height = spec.width, spec.height
-    hero_cap = _hero_cap_s(spec.duration_band_s)
+    hero_cap = _hero_cap_s(spec.duration_band_s) if max_duration_s is None else max_duration_s
     checks: list[dict[str, Any]] = []
     reasons: list[str] = []
 
