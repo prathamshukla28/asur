@@ -1,5 +1,7 @@
 """Build the ASUR Lyric-Video beginner guide PDF (reportlab, no external assets)."""
 
+from pathlib import Path
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
@@ -17,7 +19,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-OUT = "/Users/user/code security 10/asur/lyric_video_guide/ASUR-Lyric-Video-Guide.pdf"
+OUT = str(Path(__file__).resolve().parent / "ASUR-Lyric-Video-Guide.pdf")
 
 INK = colors.HexColor("#14202b")
 RED = colors.HexColor("#d7263d")
@@ -260,7 +262,7 @@ def build():
 
     story.append(para("4. Where the results live", H2))
     story.append(para("Everything for one song is saved inside the project folder, so nothing gets lost or overwritten:", BODY))
-    story.append(para("<font name='Courier' color='#1b4965'>/Users/you/.../asur/lyric_video/</font>", BODY))
+    story.append(para("<font name='Courier' color='#1b4965'>/Users/you/.../asur/studio/lyric_video/</font>", BODY))
     story.append(para("- the timing files, the sync test, the creative plan, the hero proof, and the final video all collect here, each stage in its own place.", BODY))
 
     story.append(para("5. Three rules ASUR always follows", H2))

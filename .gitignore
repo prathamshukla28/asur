@@ -33,9 +33,21 @@ htmlcov/
 .vscode/
 .idea/
 
-# Generated output
+# Generated output (studio tools write here; see MAP.md)
+outputs/
 edit_out/
 render_out/
 
+# `asur render` media workspace + per-project artifact store (see MAP.md)
+youtube/
+.script/
+
+# Local tool state
+.serena/
+archive/user.email
+archive/user.name
+archive/stray-*/
+
 # Generated / large media (never commit binaries to history)
+studio/lyric_video/project/
 lyric_video/project/

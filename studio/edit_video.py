@@ -31,12 +31,12 @@ REQUIREMENTS (already present on this Mac): ffmpeg, ffprobe, swift.
 OPTIONAL: faster-whisper (only for --captions auto).
 
 RUN (from the asur/ directory):
-  PYTHONPATH="$(pwd)" python3 edit_video.py --input /path/to/clip.mp4
-  PYTHONPATH="$(pwd)" python3 edit_video.py --input clip.mp4 --styles punchy,meme,beatcut
-  PYTHONPATH="$(pwd)" python3 edit_video.py --input clip.mp4 --captions auto
+  PYTHONPATH="$(pwd)" python3 studio/edit_video.py --input /path/to/clip.mp4
+  PYTHONPATH="$(pwd)" python3 studio/edit_video.py --input clip.mp4 --styles punchy,meme,beatcut
+  PYTHONPATH="$(pwd)" python3 studio/edit_video.py --input clip.mp4 --captions auto
   # no file handy? make a throwaway test clip and edit it:
-  PYTHONPATH="$(pwd)" python3 edit_video.py --make-sample
-Outputs: ./edit_out/variant_<style>.mp4 for each requested style.
+  PYTHONPATH="$(pwd)" python3 studio/edit_video.py --make-sample
+Outputs: outputs/edit_out/variant_<style>.mp4 for each requested style.
 """
 
 from __future__ import annotations
@@ -503,7 +503,7 @@ def _parse_styles(raw: str) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="edit_video")
     parser.add_argument("--input", help="path to the source video to edit")
-    parser.add_argument("--out", default="edit_out")
+    parser.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "outputs" / "edit_out"))
     parser.add_argument("--styles", default="punchy,cinematic",
                         help=f"comma-separated subset of: {', '.join(ALL_STYLES)}")
     parser.add_argument("--captions", choices=("headline", "auto"), default="headline",

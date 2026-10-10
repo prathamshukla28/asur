@@ -219,7 +219,7 @@ def build_sync_test(project: str) -> int:
     print("  Confirm the RED word lands on the word being sung, for the whole song.")
     print("  If it drifts, fix lyrics.txt or re-run Stage 1 timing; do NOT freeze yet.")
     print("  When it looks right, freeze Stage 1:")
-    print(f"    python3 lyric_video/timing.py --project {project} --freeze")
+    print(f"    python3 studio/lyric_video/timing.py --project {project} --freeze")
     return 0
 
 

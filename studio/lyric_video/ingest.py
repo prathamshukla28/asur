@@ -26,10 +26,10 @@ WHAT THIS IS NOT
 REQUIREMENTS: yt-dlp, ffmpeg (both present). OPTIONAL: faster-whisper (for the draft).
 
 RUN (from the asur/ directory):
-  PYTHONPATH="$(pwd)" python3 lyric_video/ingest.py --url "<youtube url>" --i-have-rights
-  PYTHONPATH="$(pwd)" python3 lyric_video/ingest.py --url "<url>" --name my-song --i-have-rights
-Output: lyric_video/project/<name>/song.wav + lyrics_draft.txt + ingest-report.json
-Next:   correct lyrics_draft.txt -> save as lyric_video/project/<name>/lyrics.txt
+  PYTHONPATH="$(pwd)" python3 studio/lyric_video/ingest.py --url "<youtube url>" --i-have-rights
+  PYTHONPATH="$(pwd)" python3 studio/lyric_video/ingest.py --url "<url>" --name my-song --i-have-rights
+Output: studio/lyric_video/project/<name>/song.wav + lyrics_draft.txt + ingest-report.json
+Next:   correct lyrics_draft.txt -> save as studio/lyric_video/project/<name>/lyrics.txt
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path("lyric_video") / "project"
+PROJECT_ROOT = Path(__file__).resolve().parent / "project"
 
 # The one honest refusal: never download copyrighted audio without an explicit
 # human confirmation of rights. This is the rights gate (ASUR-HUMAN-01 + the guide's
@@ -202,7 +202,7 @@ def ingest(url: str, *, name: str | None, have_rights: bool) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="lyric_video/ingest.py",
+        prog="studio/lyric_video/ingest.py",
         description="Stage -1: pull a song's audio from a YouTube URL + a DRAFT transcript.",
     )
     parser.add_argument("--url", required=True, help="YouTube video or song URL")

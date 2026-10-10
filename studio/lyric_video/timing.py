@@ -36,8 +36,8 @@ FREEZE (ASUR-VERSION-01)
 REQUIREMENTS (all already installed): torch, torchaudio, demucs, uroman, soundfile.
 
 RUN (from the asur/ directory):
-  PYTHONPATH="$(pwd)" python3 lyric_video/timing.py --project lyric_video/project/<name>
-  PYTHONPATH="$(pwd)" python3 lyric_video/timing.py --project <dir> --freeze
+  PYTHONPATH="$(pwd)" python3 studio/lyric_video/timing.py --project studio/lyric_video/project/<name>
+  PYTHONPATH="$(pwd)" python3 studio/lyric_video/timing.py --project <dir> --freeze
 """
 
 from __future__ import annotations

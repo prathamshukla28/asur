@@ -22,8 +22,8 @@ WHAT THIS IS NOT
 REQUIREMENTS (all already present on this Mac): ffmpeg, ffprobe, say, swift.
 
 RUN (from the asur/ directory):
-  PYTHONPATH="$(pwd)" python3 render_demo.py --idea "why most people waste money on AI tools"
-Output: ./render_out/asur_reel.mp4
+  PYTHONPATH="$(pwd)" python3 studio/render_demo.py --idea "why most people waste money on AI tools"
+Output: outputs/render_out/asur_reel.mp4
 """
 
 from __future__ import annotations
@@ -287,7 +287,7 @@ def render(idea_line: str, out_dir: Path) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="render_demo")
     parser.add_argument("--idea", default="why most people waste money on AI tools")
-    parser.add_argument("--out", default="render_out")
+    parser.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "outputs" / "render_out"))
     args = parser.parse_args(argv)
 
     final = render(args.idea, Path(args.out))
