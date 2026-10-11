@@ -19,6 +19,7 @@ GENERATION's control level imports a media dependency at module load.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -33,12 +34,27 @@ from .adapters.ffmpeg import RenderError
 __all__ = ["RenderError", "build_final_render"]
 
 
+def _audio_track(assets: Mapping[str, Any] | None) -> str | None:
+    """Pick the audio file to mux from a ``produce_assets`` result.
+
+    The FFmpeg adapter muxes one audio input and trims it to the video length.
+    Prefer the narration voice (it is the information-carrying track); fall back
+    to the music bed when there is no voice. A richer two-track mix (voice over a
+    ducked music bed) is a follow-up; here we never fabricate a track - absent
+    both, the render is silent.
+    """
+    if not assets:
+        return None
+    return assets.get("voice") or assets.get("music") or None
+
+
 def build_final_render(
     edit_plan_artifact: Artifact,
     project_id: str,
     *,
     platform: str | None = None,
     out_root: str,
+    assets: Mapping[str, Any] | None = None,
     identity: Identity | None = None,
 ) -> Artifact:
     """Render an approved edit plan to a real MP4 and record a ``render`` artifact.
@@ -48,6 +64,12 @@ def build_final_render(
     and emits a ``render`` artifact carrying the adapter's provenance + license
     block (ASUR-PROV-01) and the verification report (ASUR-EXPLAIN-01).
 
+    When ``assets`` (the ``produce_assets`` result) is supplied, its real AI
+    backgrounds are composited and its voice/music are muxed into the render
+    (SPEC-GAP G27), and the render body records which asset files were wired.
+    ``assets=None`` forwards nothing and stays byte-identical to the P10 render
+    (ASUR-VERSION-01).
+
     Raises ``RenderError`` if verification reports ``fail`` (ASUR-GATE-01).
     """
     from .adapters import ffmpeg
@@ -56,11 +78,20 @@ def build_final_render(
     subject = edit_body.get("subject", "")
     timeline = edit_body.get("timeline") or {}
 
+    backgrounds = dict(assets.get("backgrounds") or {}) if assets else None
+    audio_path = _audio_track(assets) if assets else None
+
+    adapter_kwargs: dict[str, Any] = {"platform": platform}
+    if backgrounds:
+        adapter_kwargs["backgrounds"] = backgrounds
+    if audio_path:
+        adapter_kwargs["audio_path"] = audio_path
+
     out_dir = Path(out_root)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "final-video.mp4"
 
-    adapter_result = ffmpeg.render(timeline, str(out_path), platform=platform)
+    adapter_result = ffmpeg.render(timeline, str(out_path), **adapter_kwargs)
 
     # A FULL final render is not a hero proof: its duration ceiling is the
     # platform band's upper bound, not the short hero cap. An undeclared band
@@ -88,6 +119,12 @@ def build_final_render(
             "ffprobe, degrading to skipped offline (G10)"
         ),
     }
+    if assets is not None:
+        body["assets"] = {
+            "backgrounds": sorted((backgrounds or {}).keys()),
+            "voice": bool(assets.get("voice")),
+            "music": bool(assets.get("music")),
+        }
 
     return make_artifact(
         kind="render",

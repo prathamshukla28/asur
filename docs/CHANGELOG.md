@@ -9,6 +9,43 @@ gate.
 
 ## [Unreleased]
 
+### Added — P11b (produce real AI assets + composite them into the render)
+- **`produce_assets`** (`asur/asur/generation/produce.py`, SPEC-GAP **G27**): walks a
+  generation plan's jobs in dependency order, runs each AI job through the dispatcher,
+  and groups the produced files by role — `{backgrounds: {scene_id: png}, voice: wav|None,
+  music: wav|None, assets: [provenance...], skipped: [job_id...]}`. On-screen-text
+  (model `FFmpeg`, burned in at render time) and user-original footage (model
+  `user-camera`, creator-owned) jobs are **skipped and recorded**, never silently dropped.
+  Fails closed (ASUR-GATE-01): a raising adapter (missing `asur[generation]` extra)
+  propagates, and an adapter that claims a file not on disk raises `RenderError`. The
+  dispatcher + the ffmpeg import are lazy, so the module stays stdlib-only and the
+  boundary import-linter stays green.
+- **Background compositing** (`asur/asur/generation/adapters/ffmpeg.py`, SPEC-GAP **G27**):
+  `render(timeline, out_path, *, backgrounds=None, ...)`. A scene with a produced image
+  is composited (`-loop 1 … -i <png>`, scale-to-cover + centre-crop to the pack
+  resolution) instead of a solid colour card; any burned-in caption joins the same
+  `-vf` chain and the drawtext fallback keeps the background. Scenes with no produced
+  image stay solid cards, so `backgrounds=None` is byte-identical to the P10 render
+  (ASUR-VERSION-01). A referenced background file that is absent fails closed
+  (`RenderError`). Provenance gains `backgrounds_used` (0 when none).
+- **Asset wiring in `build_final_render`** (`asur/asur/generation/render.py`): gains an
+  optional `assets=` (the `produce_assets` result). When supplied, its backgrounds are
+  composited and its voice/music are muxed (voice preferred — the information-carrying
+  track; no fabricated audio, ASUR-HONEST-01), and the render body records which asset
+  roles were wired. `assets=None` forwards nothing and stays byte-identical to P10.
+- **Captions dispatch fix** (`asur/asur/generation/dispatch.py`): the `captions` branch
+  now feeds faster-whisper the real produced voice WAV via `params['audio_path']`
+  (falling back to the ref string only when no audio was wired), and `captions` jobs
+  get a `.json` output extension. faster-whisper transcribes an *input* audio file, not
+  an `out_path`.
+- **Tests** (`tests/test_produce_p11b.py`, 9 tests, tests-first/RED-confirmed): produce
+  groups backgrounds/voice/music; FFmpeg + user-camera jobs are skipped; fail-closed on a
+  raising adapter and on a missing output file; a background PNG is composited via
+  `-loop 1 -i <png>` + scale/crop while other scenes stay colour cards; no-background
+  render is byte-identical (no new used-count); a missing background file fails closed;
+  compositing still renders at the pack resolution; `build_final_render(assets=None)` is
+  byte-identical. Full suite **326 passed, 8 deselected**.
+
 ### Added — P11a (real screenplay prompts into generation jobs + AI adapter baseline)
 - **Prompt threading** (SPEC-GAP **G26**): `build_generation_plan`
   (`asur/asur/generation/generation_plan.py`) gains an optional keyword-only

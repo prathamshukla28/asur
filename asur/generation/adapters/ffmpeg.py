@@ -103,6 +103,38 @@ def _scene_captions(timeline: dict[str, Any]) -> list[str]:
     return captions
 
 
+def _scene_backgrounds(
+    timeline: dict[str, Any], backgrounds: dict[str, str] | None
+) -> list[Path | None]:
+    """One background Path (or None) per scene index, matched by scene id (G27).
+
+    A produced background is keyed in ``backgrounds`` by its scene id; the asset
+    ref that produced it is ``f"{scene_id}-background"``. A scene with no produced
+    image renders a solid colour card (the P10 fallback), so a render with no
+    backgrounds at all is byte-identical. A referenced file that is NOT on disk
+    fails closed (``RenderError``, ASUR-GATE-01): we never silently drop a visual
+    the plan said exists.
+    """
+    scenes = timeline.get("scenes") or []
+    if not backgrounds:
+        return [None for _ in scenes]
+    resolved: list[Path | None] = []
+    for scene in scenes:
+        scene_id = str(scene.get("scene_id", ""))
+        ref = backgrounds.get(scene_id)
+        if not ref:
+            resolved.append(None)
+            continue
+        path = Path(ref)
+        if not path.is_file():
+            raise RenderError(
+                f"background image for scene {scene_id!r} is missing on disk "
+                f"({ref!r}); fail closed (ASUR-GATE-01)"
+            )
+        resolved.append(path)
+    return resolved
+
+
 def _escape_drawtext(text: str) -> str:
     """Escape a caption string for an ffmpeg drawtext ``text=`` value.
 
@@ -162,26 +194,56 @@ def _render_card(
     height: int,
     fps: int,
     caption: str = "",
+    background: Path | None = None,
     skipped: list[int] | None = None,
 ) -> Path:
-    """Render ONE solid-colour card at the given resolution/fps (deterministic).
+    """Render ONE card at the given resolution/fps (deterministic).
+
+    When ``background`` is given (a real produced image, e.g. an SDXL PNG), the
+    card is that image scaled-to-cover and centre-cropped to the frame - a true
+    AI visual, not a placeholder (SPEC-GAP G27). When ``background`` is None the
+    card is a deterministic solid colour (the P10 fallback), so a render with no
+    produced backgrounds is byte-identical.
 
     When ``caption`` is non-empty, the authored text is burned into the safe area
-    via a drawtext video filter; an empty caption renders a clean card (identical
-    to the pre-caption output), so a timeline with no overlays is byte-identical.
+    via drawtext (joined onto the SAME ``-vf`` chain as any scale/crop), so an
+    empty caption + no background renders the exact pre-P11b clean card.
     """
     colour = _PALETTE[index % len(_PALETTE)]
     out = work / f"scene_{index:03d}.mp4"
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "lavfi",
-        "-i",
-        f"color=c={colour}:s={width}x{height}:r={fps}:d={seconds:.3f}",
-    ]
+    # Build the video-filter chain. A background image needs scale-to-cover +
+    # centre-crop to the exact frame; the solid-colour source already fills it.
+    vf_parts: list[str] = []
+    if background is not None:
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loop",
+            "1",
+            "-framerate",
+            str(fps),
+            "-t",
+            f"{seconds:.3f}",
+            "-i",
+            str(background),
+        ]
+        vf_parts.append(
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},setsar=1"
+        )
+    else:
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c={colour}:s={width}x{height}:r={fps}:d={seconds:.3f}",
+        ]
     if caption:
-        cmd += ["-vf", _drawtext_filter(caption, height=height)]
+        vf_parts.append(_drawtext_filter(caption, height=height))
+    if vf_parts:
+        cmd += ["-vf", ",".join(vf_parts)]
     cmd += [
         "-c:v",
         "libx264",
@@ -193,12 +255,14 @@ def _render_card(
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
     if caption and proc.returncode != 0 and "No such filter: 'drawtext'" in (proc.stderr or ""):
-        # This ffmpeg build has no libfreetype. Render the card clean and record
-        # the skip so provenance never claims text that is not on screen
-        # (ASUR-HONEST-01) instead of failing the whole render.
+        # This ffmpeg build has no libfreetype. Render the card clean (KEEPING the
+        # background image) and record the skip so provenance never claims text
+        # that is not on screen (ASUR-HONEST-01) instead of failing the render.
         if skipped is not None:
             skipped.append(index)
-        return _render_card(index, seconds, work, width=width, height=height, fps=fps)
+        return _render_card(
+            index, seconds, work, width=width, height=height, fps=fps, background=background
+        )
     if proc.returncode != 0 or not out.is_file():
         raise RenderError(f"ffmpeg card render failed (scene {index}): {proc.stderr[-400:]}")
     return out
@@ -254,6 +318,7 @@ def render(
     *,
     platform: str | None = None,
     audio_path: str | None = None,
+    backgrounds: dict[str, str] | None = None,
     **params: Any,
 ) -> dict[str, Any]:
     """Render a Timeline (dict or ``.to_dict()``-able) to a real MP4 file.
@@ -288,6 +353,7 @@ def render(
             "(fail closed, ASUR-GATE-01)"
         )
     captions = _scene_captions(tl)
+    scene_backgrounds = _scene_backgrounds(tl, backgrounds)
     skipped: list[int] = []
 
     audio = Path(audio_path) if audio_path else None
@@ -309,6 +375,7 @@ def render(
                 height=height,
                 fps=fps,
                 caption=captions[i] if i < len(captions) else "",
+                background=scene_backgrounds[i] if i < len(scene_backgrounds) else None,
                 skipped=skipped,
             )
             for i, dur in enumerate(durations)
@@ -316,6 +383,7 @@ def render(
         _concat(cards, out, work, audio_path=audio)
 
     total_s = round(sum(durations), 3)
+    backgrounds_used = sum(1 for bg in scene_backgrounds if bg is not None)
     captions_burned_in = any(c for i, c in enumerate(captions) if i not in skipped)
     captions_skipped_reason = (
         "ffmpeg build lacks the drawtext filter (libfreetype); "
@@ -335,6 +403,7 @@ def render(
             "fps": fps,
             "resolution": f"{width}x{height}",
             "duration_s": total_s,
+            "backgrounds_used": backgrounds_used,
             "captions_burned_in": captions_burned_in,
             "captions_skipped_reason": captions_skipped_reason,
             "audio_present": audio_present,

@@ -79,9 +79,13 @@ def run_job(job: dict[str, Any], *, timeline: Any = None, out_dir: str) -> dict[
     adapter = _resolve(model)
     target = str(job.get("target_asset", job.get("job_id", "asset")))
     media_type = str(job.get("params", {}).get("media_type", "video"))
-    ext = {"video": "mp4", "image": "png", "audio_voice": "wav", "audio_music": "wav"}.get(
-        media_type, "out"
-    )
+    ext = {
+        "video": "mp4",
+        "image": "png",
+        "audio_voice": "wav",
+        "audio_music": "wav",
+        "captions": "json",
+    }.get(media_type, "out")
     out_path = os.path.join(out_dir, f"{target}.{ext}")
 
     # FFmpeg renders a timeline; image adapters write a PNG to out_path; audio
@@ -100,8 +104,11 @@ def run_job(job: dict[str, Any], *, timeline: Any = None, out_dir: str) -> dict[
     elif media_type == "audio_music":
         result = adapter(prompt, out_path, seconds=float(params.get("seconds", 10.0)))
     elif media_type == "captions":
-        # faster-whisper takes an INPUT audio path, not an out_path (see DEFERRED.md).
-        result = adapter(target, language=params.get("language", "en"))
+        # faster-whisper transcribes an INPUT audio file (not an out_path): it
+        # needs the real produced voice WAV via params['audio_path'], falling
+        # back to the ref string only when no audio was wired.
+        audio_in = params.get("audio_path") or target
+        result = adapter(audio_in, language=params.get("language", "en"))
     else:
         result = adapter(prompt)
 
