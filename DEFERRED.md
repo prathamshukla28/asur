@@ -29,9 +29,9 @@ into the render; only AI video (Wan 2.2) and the OTIO interchange remain stubs.
 | Adapter | Status today | What remains |
 | --- | --- | --- |
 | `generation/adapters/ffmpeg.py` | **REAL.** Renders true H.264 pixels from the timeline via the local `ffmpeg` binary at the pack resolution: produced AI background images are composited (scale-to-cover + centre-crop), with solid-colour cards as the fallback for scenes with no image, plus burned-in captions and optional audio mux. No model, no GPU, no network. Returns provenance + license. | Nothing — it works. |
-| `generation/adapters/sdxl.py` (images) | **REAL (human-run local-only).** Lazy-imports `torch`/`diffusers`/`PIL`; generates a 1080x1920 portrait PNG on MPS/CUDA/CPU; returns provenance + license. Fails closed with `RuntimeError` if the generation extra is absent. Real-run lines are `# pragma: no cover` (G10: no GPU/no network in CI). Produced by `produce_assets` and composited into the render (P11b). | Deps still unpinned in the extra (§2). |
-| `generation/adapters/kokoro.py` (voice) | **REAL (human-run local-only).** Lazy-imports `kokoro`/`numpy`/`soundfile`; synthesises a 24 kHz WAV; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. Produced by `produce_assets` and muxed into the render (P11b). | Deps unpinned (§2). |
-| `generation/adapters/stable_audio.py` (music) | **REAL (human-run local-only).** Lazy-imports `torch`/`torchaudio`/`stable_audio_tools`; generates a 44.1 kHz stereo WAV; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. Produced by `produce_assets`; the single-track mux prefers voice (P11b); a two-track voice-over-ducked-music mix is a follow-up. | Deps unpinned (§2); two-track mix. |
+| `generation/adapters/sdxl.py` (images) | **REAL (human-run local-only).** Lazy-imports `torch`/`diffusers`/`PIL`; generates a 1080x1920 portrait PNG on MPS/CUDA/CPU; returns provenance + license. Fails closed with `RuntimeError` if the generation extra is absent. Real-run lines are `# pragma: no cover` (G10: no GPU/no network in CI). Produced by `produce_assets` and composited into the render (P11b). | Nothing — deps pinned in the extra (P11c, G28). |
+| `generation/adapters/kokoro.py` (voice) | **REAL (human-run local-only).** Lazy-imports `kokoro`/`numpy`/`soundfile`; synthesises a 24 kHz WAV; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. Produced by `produce_assets` and muxed into the render (P11b). | Nothing — deps pinned in the extra (P11c, G28). |
+| `generation/adapters/stable_audio.py` (music) | **REAL (human-run local-only).** Lazy-imports `torch`/`torchaudio`/`stable_audio_tools`; generates a 44.1 kHz stereo WAV; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. Produced by `produce_assets`; the single-track mux prefers voice (P11b); a two-track voice-over-ducked-music mix is a follow-up. | Two-track mix (deps pinned, P11c/G28). |
 | `generation/adapters/faster_whisper.py` (captions) | **REAL (human-run local-only).** Lazy-imports `faster_whisper`; transcribes an input audio file with deterministic greedy decoding + word timestamps; returns provenance + license. Fails closed without the extra. `# pragma: no cover`. The dispatcher now feeds it the produced voice WAV via `params['audio_path']` (P11b). | Deps: `faster-whisper` is already in the extra. |
 | `generation/adapters/wan22.py` (AI video) | **STUB.** Lazy-imports `torch` then raises `NotImplementedError` ("human-run, local-only GPU step"). | Add `torch`; needs a real GPU; run locally. Deferred past P11 (SPEC-GAP G29). |
 | `editing/adapters/otio.py` (timeline interchange) | **STUB.** `to_otio`/`from_otio` raise `NotImplementedError`. | Wire against `opentimelineio` (in the extra). Not needed for a render — FFmpeg renders straight from the timeline. |
@@ -44,18 +44,7 @@ without the extra and never run in CI) — not something CI pretends to do.
 
 ---
 
-## 2. The generation extra is incomplete
-
-`pyproject.toml` `[project.optional-dependencies].generation` lists only
-`moviepy`, `faster-whisper`, `librosa`, `opentimelineio` (all unpinned).
-Missing for the now-real adapters above: `torch`, `diffusers`, `transformers`,
-`accelerate`, `safetensors`, `Pillow`, `kokoro`, `soundfile`, `numpy`,
-`stable_audio_tools`, `torchaudio`. Needs: add them (pinned) — scheduled for
-P11c alongside the compositing path (SPEC-GAP G28).
-
----
-
-## 3. Enforcement that is partial or human-only
+## 2. Enforcement that is partial or human-only
 
 | Obligation | Stated in | Enforced today | Needs |
 | --- | --- | --- | --- |
@@ -66,7 +55,7 @@ P11c alongside the compositing path (SPEC-GAP G28).
 
 ---
 
-## 4. Known open SPEC-GAP
+## 3. Known open SPEC-GAP
 
 **G15** — `part1` / `part2` / `part3` at the parent directory are 0-byte files.
 They are flagged and ignored; they are not inputs. Open only in the sense that

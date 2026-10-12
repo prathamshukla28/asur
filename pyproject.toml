@@ -16,21 +16,28 @@ dependencies = []
 # Media/generation path only. Declared here so `pip install -e .[generation]`
 # can pull them, but the stdlib core NEVER imports these (ADR-0002, ADR-0004).
 # A stdlib-only install must still run SCRIPT + VIRAL CHECK + orchestration.
-# Versions are intentionally UNPINNED for now (pin in P04 when adapters land).
+# Pinned to known-good versions for a reproducible install (SPEC-GAP G28).
 # Heavy model weights (Wan 2.2, SDXL, Kokoro, Stable Audio) and ComfyUI are
 # installed/managed separately, outside pip — see docs/GENERATION_STACK.md.
+# Enabling this extra pulls torch + multi-GB weights; that is a human-gated,
+# opt-in action (ASUR-HUMAN-01). The stdlib core never imports any of these.
 [project.optional-dependencies]
 generation = [
-    "moviepy",          # MIT - FFmpeg-backed editing/compositing
-    "faster-whisper",   # MIT - word-level caption timing (no network at runtime)
-    "librosa",          # ISC - beat map / audio analysis
-    "opentimelineio",   # Apache-2.0 - timeline interchange (OTIO)
-    "torch",            # BSD-3 - tensor runtime (MPS on Apple Silicon, else CPU)
-    "diffusers",        # Apache-2.0 - SDXL image pipeline (OpenRAIL++-M weights)
-    "transformers",     # Apache-2.0 - SDXL text encoders
-    "accelerate",       # Apache-2.0 - diffusers device placement
-    "safetensors",      # Apache-2.0 - weight format SDXL loads from
-    "Pillow",           # HPND/MIT-CMU - resize/crop generated frame to 1080x1920
+    "moviepy==2.2.1",            # MIT - FFmpeg-backed editing/compositing
+    "faster-whisper==1.2.1",     # MIT - word-level caption timing (no network at runtime)
+    "librosa==1.0.0",            # ISC - beat map / audio analysis
+    "opentimelineio==0.18.1",    # Apache-2.0 - timeline interchange (OTIO)
+    "torch==2.14.1",             # BSD-3 - tensor runtime (MPS on Apple Silicon, else CPU)
+    "diffusers==0.41.0",         # Apache-2.0 - SDXL image pipeline (OpenRAIL++-M weights)
+    "transformers==5.19.0",      # Apache-2.0 - SDXL text encoders
+    "accelerate==1.15.0",        # Apache-2.0 - diffusers device placement
+    "safetensors==0.8.0",        # Apache-2.0 - weight format SDXL loads from
+    "Pillow==11.3.0",            # HPND/MIT-CMU - resize/crop generated frame to 1080x1920
+    "kokoro==0.9.4",             # Apache-2.0 - Kokoro-82M voice synthesis
+    "soundfile==0.14.0",         # BSD-3 - Kokoro 24kHz WAV writing
+    "numpy==2.5.1",              # BSD-3 - audio buffer concatenation
+    "stable-audio-tools==0.0.20",# Stable Audio Community - music generation
+    "torchaudio==2.11.0",        # BSD-2 - Stable Audio 44.1kHz WAV writing
 ]
 
 [project.scripts]

@@ -9,6 +9,22 @@ gate.
 
 ## [Unreleased]
 
+### Added — P11c (pin the generation extra, G28)
+- **Pinned `asur[generation]`** (`pyproject.toml`, SPEC-GAP **G28**): every dependency
+  in the optional `generation` extra is now pinned to a known-good version for a
+  reproducible opt-in install, replacing the previous unpinned list.
+- **Added the five P11b audio/caption deps** that the now-real adapters need:
+  `kokoro`, `soundfile`, `numpy`, `stable-audio-tools`, `torchaudio` (each with its
+  license + purpose noted inline alongside the existing ten).
+- **`[project].dependencies` stays `[]`** (ASUR-LOCAL-01): the stdlib core still
+  installs and runs SCRIPT + VIRAL CHECK + orchestration with zero third-party
+  packages. Enabling the extra pulls `torch` + multi-GB weights and is a human-gated,
+  opt-in action (ASUR-HUMAN-01); the core never imports any of these.
+- **Tests first** (`tests/test_generation_extra_p11c.py`): asserts the extra lists
+  every real-adapter dependency, that every entry carries a `==` pin, and that
+  `[project].dependencies` remains empty. Reads `pyproject.toml` only (stdlib
+  `tomllib`, `importorskip` on 3.10); never imports `torch` or any heavy dep.
+
 ### Added — P11b (produce real AI assets + composite them into the render)
 - **`produce_assets`** (`asur/asur/generation/produce.py`, SPEC-GAP **G27**): walks a
   generation plan's jobs in dependency order, runs each AI job through the dispatcher,
