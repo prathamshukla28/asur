@@ -9,6 +9,21 @@ gate.
 
 ## [Unreleased]
 
+### Added — V1b (human-gated collector for the viral-check correlation study, G30)
+- **Collector CLI** (`studio/validation/collect.py`, SPEC-GAP **G30 V1b**): turns a
+  human-prepared JSON clip list into the exact sealed dataset the V1a blind scorer
+  and offline correlator already consume (`clip_meta.json` with observable metadata
+  only, `views.sealed.json` written last with public view counts, empty blind-rating
+  stubs under `ratings/`, and a `clips/` drop folder).
+- **Human-gated, never networked in code** (ASUR-LOCAL-01 / ASUR-HUMAN-01): the tool
+  prints a loud banner, never logs in, never calls a platform API, and never downloads
+  — the creator gathers public clips and public view counts with their own browser.
+  It lives **outside** `asur/` (exempt from the stdlib-only boundary linter) and is
+  **never imported by the core or run by pytest**.
+- **Fail-closed and honest**: refuses to overwrite an existing study (ASUR-VERSION-01),
+  rejects any clip missing an integer public view count, writes view counts only into
+  the sealed file, and leaves judgment booleans empty for a blind rater (nothing invented).
+
 ### Added — V1a (blind-correlation validation spine for the viral checker, G30)
 - **Validation package** (`asur/viral_check/validation/`, stdlib-only, SPEC-GAP **G30**):
   a three-stage spine that measures whether the viral checker's per-dimension
