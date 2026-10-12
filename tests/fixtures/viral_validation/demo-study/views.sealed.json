@@ -1,0 +1,12 @@
+{
+  "note": "SEALED OUTCOME. The blind scorer MUST NEVER read this file. Public view counts only (no private watch-time/retention for public-creator clips). Unsealed only by the offline correlation step.",
+  "sealed_at": "2026-02-01T00:00:00Z",
+  "metric": "public_views",
+  "views": {
+    "clip-01": 50000,
+    "clip-02": 20000,
+    "clip-03": 8000,
+    "clip-04": 3000,
+    "clip-05": 500
+  }
+}

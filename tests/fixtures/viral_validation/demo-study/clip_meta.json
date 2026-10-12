@@ -1,0 +1,58 @@
+{
+  "study_id": "demo-study",
+  "platform": "public-reels",
+  "collected_at": "2026-01-01T00:00:00Z",
+  "note": "Fixture study for V1a unit tests. Observable metadata only; NO view counts here (they live sealed). pre_derived facts stand in for ffprobe/model output so tests need no binaries.",
+  "clips": [
+    {
+      "clip_id": "clip-01",
+      "source_url": "https://example.test/clip-01",
+      "collected_at": "2026-01-01T00:00:00Z",
+      "pre_derived": {
+        "aspect_ratio": "9:16",
+        "low_resolution": false,
+        "muted": false
+      }
+    },
+    {
+      "clip_id": "clip-02",
+      "source_url": "https://example.test/clip-02",
+      "collected_at": "2026-01-01T00:00:00Z",
+      "pre_derived": {
+        "aspect_ratio": "9:16",
+        "low_resolution": false,
+        "muted": false
+      }
+    },
+    {
+      "clip_id": "clip-03",
+      "source_url": "https://example.test/clip-03",
+      "collected_at": "2026-01-01T00:00:00Z",
+      "pre_derived": {
+        "aspect_ratio": "9:16",
+        "low_resolution": false,
+        "muted": false
+      }
+    },
+    {
+      "clip_id": "clip-04",
+      "source_url": "https://example.test/clip-04",
+      "collected_at": "2026-01-01T00:00:00Z",
+      "pre_derived": {
+        "aspect_ratio": "9:16",
+        "low_resolution": false,
+        "muted": false
+      }
+    },
+    {
+      "clip_id": "clip-05",
+      "source_url": "https://example.test/clip-05",
+      "collected_at": "2026-01-01T00:00:00Z",
+      "pre_derived": {
+        "aspect_ratio": "1:1",
+        "low_resolution": true,
+        "muted": false
+      }
+    }
+  ]
+}

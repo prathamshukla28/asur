@@ -9,6 +9,34 @@ gate.
 
 ## [Unreleased]
 
+### Added — V1a (blind-correlation validation spine for the viral checker, G30)
+- **Validation package** (`asur/viral_check/validation/`, stdlib-only, SPEC-GAP **G30**):
+  a three-stage spine that measures whether the viral checker's per-dimension
+  *input-quality* score correlates with real-world performance — **without ever
+  emitting a predicted-outcome or "% viral" number** (ASUR-HONEST-01).
+- **`derive.py`** — `derive_platform_facts()` builds a plain-observable
+  `platform_facts` dict: machine-observable facts (aspect ratio, resolution,
+  audio presence) come from an injected `probe`; the judgment calls
+  (`strong_first_three_seconds`, `delivers_promise`) come only from a **blind human
+  rater** and are **omitted when absent** — never invented (§7). Captions presence
+  is `'unknown'` when the model/extra is absent rather than guessed. Real-run
+  `probe_clip`/`captions_probe` helpers (ffprobe via stdlib subprocess; lazy
+  `faster_whisper` adapter) are `# pragma: no cover` — no network/GPU in tests.
+- **`score_blind.py`** — `score_study()` scores every clip through the real
+  `build_viral_view` → `build_viral_check` path (firewall fails closed on any
+  leaked target name) and writes `scores/<clip>.json`. **Hard invariant: the
+  scorer never opens `views.sealed.json`** — view counts stay sealed during
+  scoring (blind study).
+- **`correlate.py`** — `correlate()` unseals the view counts, computes the
+  **Spearman rank correlation per dimension** (`spearman()` with average-rank tie
+  handling) against public views, buckets verdicts vs median views, and writes an
+  honest `report.json` + `report.md` with recorded caveats (correlation is not
+  causation; reach is probabilistic and partly serendipitous; public-views-only).
+  The report carries **no `%` and no aggregate/overall score** (guarded).
+- **Tests-first:** `tests/test_viral_validation_v1a.py` (12 tests) + fixtures under
+  `tests/fixtures/viral_validation/demo-study/`; validation stays stdlib-only
+  (import-linter green); full suite green.
+
 ### Added — P11c (pin the generation extra, G28)
 - **Pinned `asur[generation]`** (`pyproject.toml`, SPEC-GAP **G28**): every dependency
   in the optional `generation` extra is now pinned to a known-good version for a

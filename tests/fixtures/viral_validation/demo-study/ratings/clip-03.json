@@ -1,0 +1,11 @@
+{
+  "clip_id": "clip-03",
+  "rater_id": "rater-a",
+  "rated_at": "2026-01-02T00:00:00Z",
+  "blind": true,
+  "judgments": {
+    "strong_first_three_seconds": true,
+    "delivers_promise": false,
+    "captions_present": false
+  }
+}
