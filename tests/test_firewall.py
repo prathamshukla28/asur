@@ -15,6 +15,7 @@ import pytest
 
 from asur.core.identity import Identity
 from asur.tools.projection import (
+    VIRAL_FORBIDDEN,
     FirewallLeak,
     build_generation_view,
     build_viral_view,
@@ -261,3 +262,30 @@ def test_viral_check_never_imports_generation():
         imported = _top_level_imports(mod)
         leaked = imported & _GENERATION_PKGS
         assert not leaked, f"{mod} imports GENERATION {leaked} (firewall breach)"
+
+
+# -- CI firewall grep guard (regression) ------------------------------------
+
+_CI_WORKFLOW = _PACKAGE_ROOT.parent / ".github" / "workflows" / "ci.yml"
+
+
+def test_ci_firewall_grep_guard_targets_real_dirs():
+    """ASUR-FIREWALL-01: the CI grep guard must scan the dirs that exist.
+
+    Regression guard for the dead-guard bug: the step used to grep the phantom
+    ``asur/asur/...`` paths (the package root is ``asur/``, not ``asur/asur/``),
+    so grep always exited non-zero, the ``if`` was false, and the guard printed
+    OK while checking nothing. It also omitted the ``quality_floors`` token.
+    """
+    ci_text = _CI_WORKFLOW.read_text(encoding="utf-8")
+
+    # (a) the phantom double path must never reappear.
+    assert "asur/asur/" not in ci_text, "CI greps phantom asur/asur/* paths"
+
+    # (b) the guard must scan the real firewall-relevant dirs.
+    for real_dir in ("asur/generation", "asur/editing", "asur/viral_check"):
+        assert real_dir in ci_text, f"CI guard does not scan {real_dir}"
+
+    # (c) the guard must cover the full VIRAL_FORBIDDEN target set.
+    for token in VIRAL_FORBIDDEN:
+        assert token in ci_text, f"CI guard omits forbidden target name {token!r}"

@@ -67,8 +67,8 @@ jobs:
       # the test suite also asserts this behaviourally.)
       - name: Firewall grep guard (no target-name leak)
         run: |
-          if grep -rInE 'quality_targets|hardness_targets|target_score|per_dimension_target|what_good_is' \
-              --include='*.py' asur/asur/generation asur/asur/editing asur/asur/viral_check; then
+          if grep -rInE 'quality_targets|hardness_targets|target_score|per_dimension_target|what_good_is|quality_floors' \
+              --include='*.py' asur/generation asur/editing asur/viral_check; then
             echo "FIREWALL LEAK: a forbidden target field name appears in a generation/editing/viral path."
             exit 1
           fi

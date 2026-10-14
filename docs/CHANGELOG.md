@@ -9,6 +9,17 @@ gate.
 
 ## [Unreleased]
 
+### Fixed — firewall CI grep guard (ASUR-FIREWALL-01)
+- The `stdlib-firewall` job's "Firewall grep guard" step scanned the phantom
+  `asur/asur/generation|editing|viral_check` paths (the package root is `asur/`,
+  not `asur/asur/`), so `grep` always exited non-zero, the `if` was false, and the
+  guard printed OK while checking nothing. It also omitted the `quality_floors`
+  token. The guard now scans the real `asur/generation asur/editing
+  asur/viral_check` dirs and covers the full `VIRAL_FORBIDDEN` target set. Added
+  `tests/test_firewall.py::test_ci_firewall_grep_guard_targets_real_dirs` as a
+  stdlib, offline regression guard that reads `ci.yml` and asserts the phantom
+  path never returns and every forbidden target name is covered.
+
 ### Added — V1b (human-gated collector for the viral-check correlation study, G30)
 - **Collector CLI** (`studio/validation/collect.py`, SPEC-GAP **G30 V1b**): turns a
   human-prepared JSON clip list into the exact sealed dataset the V1a blind scorer
