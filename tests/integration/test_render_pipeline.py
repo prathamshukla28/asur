@@ -25,7 +25,7 @@ from asur.script.idea import build_idea
 from asur.script.research import build_research
 from asur.script.script_builder import build_script
 from asur.script.strategy import build_strategy
-from asur.tools.projection import VIRAL_FORBIDDEN, build_viral_view
+from asur.tools.projection import VIRAL_FORBIDDEN, FirewallLeak, build_viral_view
 
 pytestmark = pytest.mark.integration
 
@@ -125,13 +125,44 @@ def test_build_final_render_youtube_long_is_landscape(chain, tmp_path):
     assert checks["dimensions"] == "pass"
 
 
-def test_firewall_holds_on_a_real_run(chain):
+def test_firewall_holds_on_a_real_render_artifact(chain, tmp_path):
+    """A real rendered bundle's VIRAL_VIEW carries no quality/hardness TARGET.
+
+    The render artifact's own provenance (not a hand-written literal) is fed
+    through ``build_viral_view``; its conformance scan runs for real and the
+    resulting view is asserted clean of every VIRAL_FORBIDDEN name
+    (ASUR-FIREWALL-01). This exercises the actual projection path on real output
+    rather than re-checking a fixture dict.
+    """
+    art = build_final_render(chain["edit_plan"], PROJECT_ID, out_root=str(tmp_path))
+
     view = build_viral_view(
-        bundle_hashes={"reel.mp4": "sha256:deadbeef"},
-        provenance={"model": "FFmpeg", "render_cost_usd": 0},
+        bundle_hashes={"final-video.mp4": "sha256:deadbeef"},
+        provenance=art.body["provenance"],
         platform_facts={"aspect_ratio": "9:16", "has_captions": True},
         rubric_metadata={"lane": "viral", "binding": "run-x"},
     )
     blob = repr(view).casefold()
     for forbidden in VIRAL_FORBIDDEN:
         assert forbidden.casefold() not in blob
+
+
+def test_firewall_fails_closed_if_a_target_leaks_into_provenance(chain, tmp_path):
+    """A leaked TARGET name in the render provenance fails the projection closed.
+
+    If a quality/hardness target ever leaked into a render artifact's
+    provenance, feeding it through ``build_viral_view`` must raise
+    ``FirewallLeak`` rather than pass it to the evaluator (ASUR-FIREWALL-01,
+    fails closed).
+    """
+    art = build_final_render(chain["edit_plan"], PROJECT_ID, out_root=str(tmp_path))
+    poisoned = dict(art.body["provenance"])
+    poisoned["target_score"] = 90
+
+    with pytest.raises(FirewallLeak):
+        build_viral_view(
+            bundle_hashes={"final-video.mp4": "sha256:deadbeef"},
+            provenance=poisoned,
+            platform_facts={"aspect_ratio": "9:16"},
+            rubric_metadata={"lane": "viral", "binding": "run-x"},
+        )

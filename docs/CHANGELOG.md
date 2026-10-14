@@ -9,6 +9,14 @@ gate.
 
 ## [Unreleased]
 
+### Changed — firewall real-run conformance test (ASUR-FIREWALL-01)
+- `tests/integration/test_render_pipeline.py` previously asserted the firewall on a
+  hand-written `provenance` literal, so it never exercised a real render. It now feeds
+  the **actual** `build_final_render(...).body['provenance']` of a rendered bundle into
+  `build_viral_view` and asserts no `VIRAL_FORBIDDEN` target name survives into the
+  VIRAL_VIEW, plus a fail-closed negative case that a leaked `target_score` raises
+  `FirewallLeak`.
+
 ### Fixed — firewall CI grep guard (ASUR-FIREWALL-01)
 - The `stdlib-firewall` job's "Firewall grep guard" step scanned the phantom
   `asur/asur/generation|editing|viral_check` paths (the package root is `asur/`,
