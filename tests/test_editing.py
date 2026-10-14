@@ -141,14 +141,20 @@ def test_timeline_round_trips_losslessly():
 
 
 def test_otio_round_trip_when_extra_present():
-    """ASUR-LOCAL-01: OTIO transport is behind the generation extra; skip if absent."""
+    """ASUR-LOCAL-01: OTIO transport is behind the generation extra; skip if absent.
+
+    ASUR-VERSION-01: the ASUR Timeline dict is the source of truth, so a
+    to_otio -> from_otio round-trip must return the exact same dict (OTIO is a
+    lossless transport, never a mutation).
+    """
     pytest.importorskip("opentimelineio")
     from asur.editing.adapters import otio
 
     artifacts = _edit_chain()
-    # The adapter is a declaration-only shell; export is a local-only human step.
-    with pytest.raises(NotImplementedError):
-        otio.to_otio(artifacts["timeline"])
+    timeline = artifacts["timeline"]
+    otio_obj = otio.to_otio(timeline)
+    restored = otio.from_otio(otio_obj)
+    assert restored == timeline.to_dict()
 
 
 # --- G: versioning + manual controls --------------------------------------

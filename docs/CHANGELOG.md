@@ -9,6 +9,17 @@ gate.
 
 ## [Unreleased]
 
+### Added — real OTIO timeline round-trip (ASUR-VERSION-01)
+- `asur/editing/adapters/otio.py` `to_otio`/`from_otio` are no longer stubs. `to_otio`
+  builds a standard `opentimelineio` track/clip structure for interoperability and stashes
+  the authoritative ASUR Timeline dict (as a JSON string, since OTIO's `AnyDictionary`
+  coerces nested containers on assignment) so `from_otio` returns the exact same dict —
+  OTIO is a lossless transport, never a mutation. Fails closed without the generation
+  extra, and `from_otio` fails closed (ASUR-GATE-01) on an OTIO object with no ASUR
+  metadata. `tests/test_editing.py::test_otio_round_trip_when_extra_present` now asserts a
+  real `to_otio -> from_otio` round-trip (under `importorskip`) instead of expecting
+  `NotImplementedError`.
+
 ### Changed — firewall real-run conformance test (ASUR-FIREWALL-01)
 - `tests/integration/test_render_pipeline.py` previously asserted the firewall on a
   hand-written `provenance` literal, so it never exercised a real render. It now feeds
