@@ -125,6 +125,77 @@ def test_build_final_render_youtube_long_is_landscape(chain, tmp_path):
     assert checks["dimensions"] == "pass"
 
 
+def _synth_wav(path, *, freq, seconds=2.0):
+    """Synthesize a tiny real WAV with the ffmpeg binary (no third-party deps)."""
+    import subprocess
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={freq}:duration={seconds:.2f}",
+            "-ac",
+            "1",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+
+
+def test_two_track_mix_muxes_voice_over_ducked_music(chain, tmp_path):
+    """Both a voice track and a music bed produce a single mixed audio stream.
+
+    Synthesizes two real WAVs, renders with assets={'voice', 'music'}, and
+    confirms the output carries one audio stream and provenance records two
+    source tracks (two-track voice-over-ducked-music mix).
+    """
+    import subprocess
+
+    voice = tmp_path / "voice.wav"
+    music = tmp_path / "music.wav"
+    _synth_wav(voice, freq=220)
+    _synth_wav(music, freq=440)
+
+    out_root = tmp_path / "render"
+    art = build_final_render(
+        chain["edit_plan"],
+        PROJECT_ID,
+        out_root=str(out_root),
+        assets={"voice": str(voice), "music": str(music)},
+    )
+
+    produced = out_root / "final-video.mp4"
+    assert produced.exists() and produced.stat().st_size > 0
+    assert art.body["provenance"]["audio_tracks"] == 2
+    assert art.body["provenance"]["audio_present"] is True
+
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            str(produced),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert probe.stdout.strip().splitlines() == ["audio"]
+
+
 def test_firewall_holds_on_a_real_render_artifact(chain, tmp_path):
     """A real rendered bundle's VIRAL_VIEW carries no quality/hardness TARGET.
 

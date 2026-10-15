@@ -79,13 +79,17 @@ def build_final_render(
     timeline = edit_body.get("timeline") or {}
 
     backgrounds = dict(assets.get("backgrounds") or {}) if assets else None
-    audio_path = _audio_track(assets) if assets else None
+    voice = assets.get("voice") if assets else None
+    music = assets.get("music") if assets else None
 
     adapter_kwargs: dict[str, Any] = {"platform": platform}
     if backgrounds:
         adapter_kwargs["backgrounds"] = backgrounds
-    if audio_path:
-        adapter_kwargs["audio_path"] = audio_path
+    if voice and music:
+        adapter_kwargs["audio_path"] = voice
+        adapter_kwargs["music_path"] = music
+    elif _audio_track(assets):
+        adapter_kwargs["audio_path"] = _audio_track(assets)
 
     out_dir = Path(out_root)
     out_dir.mkdir(parents=True, exist_ok=True)

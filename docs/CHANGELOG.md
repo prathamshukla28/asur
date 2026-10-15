@@ -9,6 +9,21 @@ gate.
 
 ## [Unreleased]
 
+### Added — two-track voice-over-ducked-music audio mix (ASUR-PROV-01)
+- The renderer now mixes a voice track over ducked background music when both are
+  present, instead of keeping only the voice (single-track) track. `ffmpeg._concat`
+  gained a `music_path` input and, when a voice and a music file are both on disk,
+  builds an `amix` filter graph (`volume=-3.0dB` voice over `volume=-26.0dB` ducked
+  music, from `editing/audio_mix.py` `DEFAULT_VOICE_DB`/`DEFAULT_MUSIC_DB`/`DEFAULT_DUCK_DB`)
+  and maps the mixed stereo onto the concatenated video. `render(...)` and
+  `build_final_render(...)` gained a `music_path` wiring; `build_final_render` passes
+  both when `assets` carries `voice` **and** `music`, else falls back to the single
+  preferred track (voice over music). Render provenance records a new `audio_tracks`
+  count (0/1/2) alongside `audio_present`. A missing music file is ignored, never
+  fabricated (fails open to one track). Covered by `tests/test_render_twotrack_p11.py`
+  (5 unit tests, fake-ffmpeg) plus a real-binary integration test that ffprobes exactly
+  one mixed audio stream.
+
 ### Added — real OTIO timeline round-trip (ASUR-VERSION-01)
 - `asur/editing/adapters/otio.py` `to_otio`/`from_otio` are no longer stubs. `to_otio`
   builds a standard `opentimelineio` track/clip structure for interoperability and stashes

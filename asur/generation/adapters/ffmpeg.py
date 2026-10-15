@@ -24,6 +24,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ...editing.audio_mix import DEFAULT_DUCK_DB, DEFAULT_MUSIC_DB, DEFAULT_VOICE_DB
 from ...platforms import get_platform
 
 MODEL = "FFmpeg"
@@ -269,15 +270,25 @@ def _render_card(
 
 
 def _concat(
-    cards: list[Path], out_path: Path, work: Path, *, audio_path: Path | None = None
+    cards: list[Path],
+    out_path: Path,
+    work: Path,
+    *,
+    audio_path: Path | None = None,
+    music_path: Path | None = None,
 ) -> None:
     """Join per-scene cards into the final MP4 via the concat demuxer.
 
     Abs paths need ``-safe 0``. The concat-demuxer re-encodes here (simple,
     robust across mismatched inputs); ``+faststart`` makes the file web-ready.
-    When ``audio_path`` is given it is muxed as a second input and trimmed to the
-    video length (``-shortest``); absent it, the output is silent (no fabricated
-    track).
+
+    Audio has three honest states (never a fabricated track):
+      * ``audio_path`` + ``music_path`` -> a true two-track mix. Voice sits at
+        ``DEFAULT_VOICE_DB`` and music is ducked to ``DEFAULT_MUSIC_DB +
+        DEFAULT_DUCK_DB`` so narration stays intelligible, then ``amix`` folds
+        them (``asur.editing.audio_mix`` levels).
+      * exactly one of them -> single-track mux, trimmed to video length.
+      * neither -> silent.
     """
     listing = work / "concat.txt"
     # concat demuxer wants: file '<abs path>' per line (quotes handle spaces).
@@ -292,8 +303,12 @@ def _concat(
         "-i",
         str(listing),
     ]
-    if audio_path is not None:
-        cmd += ["-i", str(audio_path)]
+    two_track = audio_path is not None and music_path is not None
+    single = (audio_path is not None) ^ (music_path is not None)
+    if two_track:
+        cmd += ["-i", str(audio_path), "-i", str(music_path)]
+    elif single:
+        cmd += ["-i", str(audio_path if audio_path is not None else music_path)]
     cmd += [
         "-c:v",
         "libx264",
@@ -304,7 +319,25 @@ def _concat(
         "-movflags",
         "+faststart",
     ]
-    if audio_path is not None:
+    if two_track:
+        # Voice (input 1) over ducked music (input 2); amix keeps both audible.
+        ducked = DEFAULT_MUSIC_DB + DEFAULT_DUCK_DB
+        cmd += [
+            "-filter_complex",
+            (
+                f"[1:a]volume={DEFAULT_VOICE_DB}dB[v];"
+                f"[2:a]volume={ducked}dB[m];"
+                "[v][m]amix=inputs=2:duration=longest:dropout_transition=0[a]"
+            ),
+            "-map",
+            "0:v",
+            "-map",
+            "[a]",
+            "-c:a",
+            "aac",
+            "-shortest",
+        ]
+    elif single:
         cmd += ["-c:a", "aac", "-shortest"]
     cmd += [str(out_path)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
@@ -318,6 +351,7 @@ def render(
     *,
     platform: str | None = None,
     audio_path: str | None = None,
+    music_path: str | None = None,
     backgrounds: dict[str, str] | None = None,
     **params: Any,
 ) -> dict[str, Any]:
@@ -356,10 +390,14 @@ def render(
     scene_backgrounds = _scene_backgrounds(tl, backgrounds)
     skipped: list[int] = []
 
-    audio = Path(audio_path) if audio_path else None
-    audio_present = audio is not None and audio.is_file()
-    if not audio_present:
-        audio = None
+    voice = Path(audio_path) if audio_path else None
+    if voice is None or not voice.is_file():
+        voice = None
+    music = Path(music_path) if music_path else None
+    if music is None or not music.is_file():
+        music = None
+    audio_tracks = int(voice is not None) + int(music is not None)
+    audio_present = audio_tracks >= 1
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -380,7 +418,7 @@ def render(
             )
             for i, dur in enumerate(durations)
         ]
-        _concat(cards, out, work, audio_path=audio)
+        _concat(cards, out, work, audio_path=voice, music_path=music)
 
     total_s = round(sum(durations), 3)
     backgrounds_used = sum(1 for bg in scene_backgrounds if bg is not None)
@@ -407,6 +445,7 @@ def render(
             "captions_burned_in": captions_burned_in,
             "captions_skipped_reason": captions_skipped_reason,
             "audio_present": audio_present,
+            "audio_tracks": audio_tracks,
             "note": (
                 f"deterministic solid-colour {spec.aspect_ratio} cards; "
                 "no model, no network, no GPU"
