@@ -101,6 +101,14 @@ def test_asset_plan_uses_locked_stack_defaults():
     assert chain["asset_plan"].body["total_estimated_cost_usd"] == 0.0
 
 
+def test_audio_assets_carry_honest_source_strategy():
+    """ASUR-HONEST-01: the shared voice/music assets are audio, not 'ai_video'."""
+    chain = _generation_chain()
+    by_ref = {a["asset_ref"]: a for a in chain["asset_plan"].body["assets"]}
+    assert by_ref["voice-track"]["source_strategy"] == "audio_voice"
+    assert by_ref["music-bed"]["source_strategy"] == "audio_music"
+
+
 def test_default_model_table_has_no_trapped_models():
     """ASUR-PROV-01: no locked-stack default is on the license trap list."""
     for model, _media, _license in _DEFAULT_MODEL.values():

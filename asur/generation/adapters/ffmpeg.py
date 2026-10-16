@@ -447,8 +447,14 @@ def render(
             "audio_present": audio_present,
             "audio_tracks": audio_tracks,
             "note": (
-                f"deterministic solid-colour {spec.aspect_ratio} cards; "
-                "no model, no network, no GPU"
+                f"{backgrounds_used} scene(s) composited over real AI background "
+                f"image(s); remaining scenes are deterministic solid-colour "
+                f"{spec.aspect_ratio} cards"
+                if backgrounds_used
+                else (
+                    f"deterministic solid-colour {spec.aspect_ratio} cards; "
+                    "no model, no network, no GPU"
+                )
             ),
         },
         "license": {

@@ -126,7 +126,7 @@ def build_asset_plan(
     assets.append(
         {
             "asset_ref": "voice-track",
-            "source_strategy": "ai_video",  # audio generated locally
+            "source_strategy": "audio_voice",  # locally generated narration audio
             "rationale": "narration voice; local, license-clean, no cloning",
             "model_choice": v_model,
             "media_type": v_type,
@@ -139,7 +139,7 @@ def build_asset_plan(
     assets.append(
         {
             "asset_ref": "music-bed",
-            "source_strategy": "ai_video",
+            "source_strategy": "audio_music",
             "rationale": "low instrumental bed; local, free below revenue threshold",
             "model_choice": m_model,
             "media_type": m_type,

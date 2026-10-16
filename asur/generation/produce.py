@@ -51,7 +51,6 @@ def produce_assets(
     generation_plan_artifact: Artifact,
     *,
     out_dir: str,
-    screenplay: Artifact | None = None,
 ) -> dict[str, Any]:
     """Run a generation plan's AI jobs and group the produced files by role.
 

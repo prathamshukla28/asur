@@ -9,6 +9,18 @@ gate.
 
 ## [Unreleased]
 
+### Fixed — honest provenance labels and signatures
+- `generation/produce.py`: dropped the unused `screenplay` keyword param from
+  `produce_assets` — no caller passed it, so the signature now reflects what the
+  function actually uses.
+- `generation/asset_strategy.py`: the shared voice-track and music-bed assets were
+  mislabelled `source_strategy: "ai_video"`; they are audio, now honestly
+  `"audio_voice"` and `"audio_music"` (matching their media_type, ASUR-EXPLAIN-01).
+- `generation/adapters/ffmpeg.py`: the render provenance `note` always claimed
+  "deterministic solid-colour cards" even when real AI background images were
+  composited; it now reflects `backgrounds_used` and names the composited scenes
+  honestly (ASUR-PROV-01).
+
 ### Changed — mypy is now a blocking CI gate for the asur package
 - The `mypy` CI step dropped its `|| true` escape hatch and now fails the build on a
   type error. It is scoped to the `asur` package only (`mypy asur`); `life_mentor` and
