@@ -18,7 +18,7 @@ What it runs (mirrors .github/workflows/ci.yml exactly, no invented commands):
   2. stdlib-only import probe     -> no forbidden media/network dep leaks into core
   3. firewall grep guard          -> no quality/hardness TARGET names leak across the wall
   4. ruff check .                 -> lint
-  5. mypy asur                    -> types (advisory, mirrors CI `|| true`)
+  5. mypy asur                    -> types (blocking, mirrors CI)
   6. pytest -q                    -> unit suite (integration excluded by addopts)
 
 Stdlib-only (ADR-0002): subprocess, datetime, pathlib, re, sys, shutil only.
@@ -227,19 +227,18 @@ def check_ruff(root: Path) -> CheckResult:
 
 
 def check_mypy(root: Path) -> CheckResult:
-    """Advisory, mirrors CI `mypy asur || true`. Never fails the run."""
     if shutil.which("mypy") is None:
         return CheckResult(
-            name="mypy asur (advisory)",
-            ok=True,
-            required=False,
-            detail="mypy not installed; skipped (advisory, like CI `|| true`)",
+            name="mypy asur",
+            ok=False,
+            required=True,
+            detail="mypy not installed; the blocking type gate cannot run",
         )
     proc = _run(["mypy", "asur"], root)
     return CheckResult(
-        name="mypy asur (advisory)",
+        name="mypy asur",
         ok=proc.returncode == 0,
-        required=False,
+        required=True,
         detail=_tail(proc.stdout + proc.stderr),
     )
 

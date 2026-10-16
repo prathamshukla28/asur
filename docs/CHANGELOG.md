@@ -9,6 +9,17 @@ gate.
 
 ## [Unreleased]
 
+### Changed — mypy is now a blocking CI gate for the asur package
+- The `mypy` CI step dropped its `|| true` escape hatch and now fails the build on a
+  type error. It is scoped to the `asur` package only (`mypy asur`); `life_mentor` and
+  `weekly_tracker` type coverage stays advisory and is not asur's gate. Fixed the one
+  real `asur` type error (`generation_plan._prompt_for_asset` reused the `scene` name
+  with an incompatible type; the background-scene local is now `bg_scene`) so
+  `mypy asur` is clean. Added a minimal `[tool.mypy]` config (`ignore_missing_imports`
+  for the lazy-imported `asur[generation]` media deps) and `tests/test_mypy_gate.py`
+  pinning the blocking, asur-scoped contract. `tools/daily_driver.check_mypy` now
+  mirrors the blocking gate.
+
 ### Added — two-track voice-over-ducked-music audio mix (ASUR-PROV-01)
 - The renderer now mixes a voice track over ducked background music when both are
   present, instead of keeping only the voice (single-track) track. `ffmpeg._concat`

@@ -43,6 +43,13 @@ generation = [
 [project.scripts]
 asur = "asur.cli:main"
 
+[tool.mypy]
+# Blocking type gate for the stdlib-only core and the asur package (CI runs
+# `mypy asur`). Optional media deps (torch, diffusers, opentimelineio, ...) live
+# behind asur[generation] and are lazy-imported, so ignore their missing stubs.
+python_version = "3.10"
+ignore_missing_imports = true
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["asur*"]

@@ -67,12 +67,12 @@ def _prompt_for_asset(
         return None
 
     if media_type == "image" and asset_ref.endswith("-background"):
-        scene = scenes_by_id.get(asset_ref[: -len("-background")])
-        if not scene:
+        bg_scene = scenes_by_id.get(asset_ref[: -len("-background")])
+        if not bg_scene:
             return None
-        concept = str(scene.get("visual_concept", "")).strip()
-        metaphor = str(scene.get("semantic_metaphor", "")).strip()
-        composition = str(scene.get("composition", "")).strip()
+        concept = str(bg_scene.get("visual_concept", "")).strip()
+        metaphor = str(bg_scene.get("semantic_metaphor", "")).strip()
+        composition = str(bg_scene.get("composition", "")).strip()
         parts = [p for p in (concept, metaphor, composition) if p]
         if not parts:
             return None

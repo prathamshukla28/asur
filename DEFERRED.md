@@ -51,7 +51,6 @@ without the extra and never run in CI) — not something CI pretends to do.
 | Firewall holds on a **real** run (VIRAL_VIEW strips named targets) | ASUR-FIREWALL-01 | Unit tests + one integration test that greps the view's `repr` for forbidden tokens; CI greps source for the target names. | A structural (not repr-grep) conformance assertion over the exact projection the evaluator receives at render time. |
 | Every asset carries complete provenance + license | ASUR-PROV-01 | The FFmpeg adapter returns a provenance+license dict; the license guard fails closed on trapped models. | Schema-validate that *every* produced asset (once real adapters land) carries the full block, not just the renderer's. |
 | Two human gates (hero-proof stage 18, publish stage 25) | ASUR-HUMAN-01 | Honored in code paths via `approval_gate`. On a solo machine producer == approver, so it records `HOLD:SELF_APPROVED` (honest, not a fake pass). | A second real local identity to reach a true distinct-approver `SHIP`. Single-user self-approval is intended, not a bypass. |
-| Type safety | — | `mypy asur` runs in CI but is **advisory** (`|| true`), not blocking. | Make mypy blocking once the codebase is clean. |
 
 ---
 

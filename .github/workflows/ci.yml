@@ -95,7 +95,7 @@ jobs:
         run: ruff check .
 
       - name: Mypy
-        run: mypy asur || true   # type coverage is advisory for now (see DEFERRED.md)
+        run: mypy asur   # blocking type gate, scoped to the asur package (see DEFERRED.md)
 
       # Default addopts already excludes the `integration` marker, so this runs
       # the stdlib unit suite only (no ffmpeg, no GPU, no network).
