@@ -78,27 +78,32 @@ jobs:
           echo "Firewall grep guard OK."
 
   lint-type-test:
-    name: ruff + mypy + pytest
+    name: ruff + mypy + pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # requires-python is >=3.10, so the whole supported range is tested, not
+        # just one version.
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
-      # No [dev] extra exists; install the tools directly. The package itself is
-      # stdlib-only, so a plain `pip install .` is enough for pytest to import it.
-      - name: Install core + dev tools
-        run: |
-          pip install .
-          pip install ruff mypy pytest
+      # Dev tools are pinned in the [dev] extra so the lint/type/test rule sets
+      # are reproducible and cannot drift when a new ruff/mypy/pytest is released.
+      # The package itself stays stdlib-only.
+      - name: Install core + pinned dev tools
+        run: pip install ".[dev]"
 
       - name: Ruff
         run: ruff check .
 
       - name: Mypy
-        run: mypy asur   # blocking type gate, scoped to the asur package (see DEFERRED.md)
+        run: mypy asur life_mentor weekly_tracker   # blocking type gate across all shipped packages
 
       # Default addopts already excludes the `integration` marker, so this runs
       # the stdlib unit suite only (no ffmpeg, no GPU, no network).

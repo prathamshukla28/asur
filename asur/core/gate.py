@@ -105,7 +105,7 @@ def run_gate(name: str, checks: list[Check]) -> GateResult:
     for check in checks:
         try:
             result, reason = check.fn()
-        except Exception as exc:  # noqa: BLE001 - fail closed on a broken check
+        except Exception as exc:  # fail closed on a broken check
             result, reason = BLOCK, f"check {check.name!r} raised: {exc!r}"
         if result not in _RANK:  # unknown disposition -> fail closed
             result, reason = BLOCK, f"check {check.name!r} returned unknown: {result!r}"

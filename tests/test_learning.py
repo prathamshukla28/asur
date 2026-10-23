@@ -273,9 +273,9 @@ def test_publish_gate_distinct_approver_ships():
 
 # --- file-based metrics ingest (disk front door for PERFORMANCE -> LEARNING) ---
 
-import json as _json
+import json as _json  # noqa: E402
 
-from asur.learning.metrics_ingest import (
+from asur.learning.metrics_ingest import (  # noqa: E402
     MetricsFileError,
     build_performance_from_file,
     read_metrics_file,

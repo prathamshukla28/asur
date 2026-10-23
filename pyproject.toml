@@ -40,10 +40,37 @@ generation = [
     "torchaudio==2.11.0",        # BSD-2 - Stable Audio 44.1kHz WAV writing
 ]
 
+# Developer / CI tooling. Pinned so lint, type-check, and test runs are
+# reproducible: a fresh `pip install ruff` in CI pulls whatever released last and
+# can change the rule set out from under the build (it did). The package itself
+# stays stdlib-only (ASUR-LOCAL-01); these are test/CI-time only, never imported
+# by the core.
+dev = [
+    "ruff==0.16.10",
+    "mypy==2.4.0",
+    "pytest==9.1.1",
+]
+
 [project.scripts]
 asur = "asur.cli:main"
 weekly-tracker = "weekly_tracker.cli:main"
 life-mentor = "life_mentor.cli:main"
+
+[tool.ruff]
+# Explicit, version-independent lint config. Without this, ruff's built-in
+# default rule set changes between releases, so a `pip install ruff` in CI could
+# pass one week and fail the next (it did — unused-noqa in life_mentor). Pinning
+# the rule set here plus a pinned ruff in the `dev` extra makes lint deterministic
+# everywhere (local, CI, contributors), independent of ruff version or any
+# machine-level user config.
+target-version = "py310"
+
+[tool.ruff.lint]
+# ruff's historical default working set (pyflakes + the import/logic pycodestyle
+# rules), made explicit, plus RUF100 so stale `# noqa` directives are caught.
+# E501 (line-too-long) is intentionally NOT enforced — the codebase does not wrap
+# at a fixed column and never has.
+select = ["E4", "E7", "E9", "F", "I", "RUF100"]
 
 [tool.mypy]
 # Blocking type gate for the stdlib-only core and the asur package (CI runs

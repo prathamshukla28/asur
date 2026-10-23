@@ -30,6 +30,7 @@ htmlcov/
 # Editor / OS
 .DS_Store
 .opencode/
+.omo/
 .vscode/
 .idea/
 
@@ -44,6 +45,8 @@ youtube/
 
 # Local tool state
 .serena/
+/user.email
+/user.name
 archive/user.email
 archive/user.name
 archive/stray-*/

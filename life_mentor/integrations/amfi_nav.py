@@ -95,7 +95,7 @@ def parse_navall(path: str | os.PathLike[str]) -> dict[str, dict[str, Any]]:
             parsed = Decimal("NaN")
         nav = parsed if parsed.is_finite() and parsed > 0 else None
         try:
-            nav_date: date | None = datetime.strptime(date_text, "%d-%b-%Y").date()  # noqa: DTZ007 - date only
+            nav_date: date | None = datetime.strptime(date_text, "%d-%b-%Y").date()  # date-only
         except ValueError:
             nav_date = None
         out[code] = {"isin_growth": isin_g, "isin_reinvest": isin_r, "scheme_name": name,

@@ -224,7 +224,7 @@ def time_project(project: Path, *, freeze: bool = False) -> int:
     lines = _read_lyrics(lyrics)
     if not lines:
         raise SystemExit(f"lyrics.txt has no words: {lyrics}")
-    print(f"timing: {sum(len(l) for l in lines)} words across {len(lines)} lines")
+    print(f"timing: {sum(len(ln) for ln in lines)} words across {len(lines)} lines")
 
     print("timing: isolating vocal (Demucs htdemucs)...")
     vocal = _isolate_vocal(song, work)

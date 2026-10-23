@@ -53,7 +53,7 @@ def _os_user() -> str:
     # It never hits the network. Guard against the rare empty/raising case.
     try:
         user = getpass.getuser()
-    except Exception:  # noqa: BLE001 - guard the rare empty/raising case, stay key-free
+    except Exception:  # guard the rare empty/raising case, stay key-free
         user = ""
     return user or os.environ.get("USER") or os.environ.get("LOGNAME") or "unknown"
 

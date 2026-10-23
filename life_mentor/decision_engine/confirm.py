@@ -11,6 +11,7 @@ analysis found something wrong (e.g. essentials would not be covered).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from asur.core.canonical import canonical_sha256
@@ -30,6 +31,7 @@ def record_confirmation(
     option_name: str,
     *,
     identity: Identity | None = None,
+    clock: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """Journal that a human chose *option_name* from *report*. Never executes it."""
     result: dict[str, Any] | None = report.get("result")
@@ -51,7 +53,10 @@ def record_confirmation(
         raise ValueError(f"option {option_name!r} is BLOCKed; it cannot be confirmed - "
                          f"resolve its blocking checks and re-run the analysis")
     who = identity or get_identity()
-    return store.journal(DECISION_JOURNAL).append({
+    # Record the confirmation under the caller's clock so a run pinned to a past
+    # date (the CLI's --generated-on) stays internally consistent with the report
+    # it feeds; defaults to the real wall clock when no clock is given.
+    return store.journal(DECISION_JOURNAL, clock=clock).append({
         "event": "decision_confirmed_by_human",
         "decision_id": report["decision_id"],
         "option": option_name,

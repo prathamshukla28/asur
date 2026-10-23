@@ -330,14 +330,15 @@ def _cmd_decide(args: argparse.Namespace, prof: Profile, store: PrivateStore, as
     return EXIT_CODES[disp]
 
 
-def _cmd_confirm(args: argparse.Namespace, store: PrivateStore) -> int:
+def _cmd_confirm(args: argparse.Namespace, store: PrivateStore, generated: str) -> int:
     if not _ID.fullmatch(args.decision_id):
         raise CliError("decision id must be the 64-character id printed by `decide`")
     path = store.path(f"decisions/reports/{args.decision_id}.json")
     if not path.is_file():
         raise CliError("no saved decision report with that id")
     report = decode_value(json.loads(path.read_text(encoding="utf-8")))
-    entry = record_confirmation(store, report, args.option)
+    entry = record_confirmation(store, report, args.option,
+                                clock=lambda: f"{generated}T00:00:00Z")
     ev = entry["event"]
     print(f"Confirmed '{ev['option']}' for decision {args.decision_id[:12]} "
           f"(status {ev['option_disposition']}; override of hold: "
@@ -442,7 +443,7 @@ def _run(args: argparse.Namespace) -> int:
     if args.cmd == "decide":
         return _cmd_decide(args, prof, store, as_of, generated)
     if args.cmd == "confirm":
-        return _cmd_confirm(args, store)
+        return _cmd_confirm(args, store, generated)
     if args.cmd == "report":
         return _cmd_report(args, prof, as_of, generated)
     if args.cmd == "journal":

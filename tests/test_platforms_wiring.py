@@ -25,11 +25,10 @@ from __future__ import annotations
 
 import pytest
 
+from asur.core.envelope import make_artifact
 from asur.generation import final_qa
 from asur.learning.publish_package import build_publish_package
 from asur.platforms import UnknownPlatform, get_platform
-from asur.core.envelope import make_artifact
-
 
 # --------------------------------------------------------------------------- #
 # final_qa.platform_family - dimensions keyed off the selected pack            #

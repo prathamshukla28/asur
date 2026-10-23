@@ -151,9 +151,12 @@ def _parse(raw: bytes, mapping: dict[str, Any], checks: list[Check]) -> dict[str
     for line_no, row in enumerate(rows[1:], start=2):
         if not any(c.strip() for c in row):
             continue
-        cell = (lambda key, r=row: r[idx[mapping[key]]] if idx[mapping[key]] < len(r) else "")
+        def cell(key: str, r: list[str] = row) -> str:
+            col = idx[mapping[key]]
+            return r[col] if col < len(r) else ""
+
         try:
-            day = datetime.strptime(cell("date_column").strip(), fmt).date()  # noqa: DTZ007
+            day = datetime.strptime(cell("date_column").strip(), fmt).date()  # date-only, tz N/A
         except ValueError:
             rejected.append({"line": line_no, "reason": f"date does not match {fmt}"})
             continue

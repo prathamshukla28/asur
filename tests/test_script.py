@@ -242,7 +242,7 @@ def test_determinism_same_idea_same_checksums():
 # P01 additions: hook A/B variant grouping (G2) + append-only hook memory (G3)
 # ---------------------------------------------------------------------------
 
-from asur.script.hook_memory import HOOK_EVENTS, HookMemory
+from asur.script.hook_memory import HOOK_EVENTS, HookMemory  # noqa: E402
 
 
 def test_ab_variants_are_data_only():
