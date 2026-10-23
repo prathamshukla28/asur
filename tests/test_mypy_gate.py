@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import tomllib
+import pytest
+
+# tomllib is stdlib only on Python >= 3.11; on 3.10 skip this module's config checks.
+tomllib = pytest.importorskip("tomllib")
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"

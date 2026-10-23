@@ -113,9 +113,14 @@ def test_importing_life_mentor_pulls_no_network_module() -> None:
         "import sys\n"
         "before=set(sys.modules)\n"
         "import life_mentor, life_mentor.profile, life_mentor.security, life_mentor.research\n"
-        "new={m.split('.')[0] for m in set(sys.modules)-before}\n"
-        "bad=new & {'socket','ssl','http','urllib','requests','httpx','aiohttp','urllib3'}\n"
-        "print(sorted(bad))\n"
+        # Forbid network-CAPABLE modules by full dotted name. urllib.parse (pure string
+        # parsing, no I/O) is pulled transitively by the stdlib on some platforms, so the
+        # old bare-'urllib' check was a cross-platform false positive; urllib.request is
+        # the network one and stays forbidden.
+        "mods=set(sys.modules)-before\n"
+        "forbidden={'socket','ssl','requests','httpx','aiohttp','urllib3',"
+        "'http.client','urllib.request','urllib.error'}\n"
+        "print(sorted(mods & forbidden))\n"
     )
     out = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True,

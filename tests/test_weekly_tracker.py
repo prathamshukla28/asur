@@ -282,8 +282,12 @@ def test_render_final_redaction_pass() -> None:
 def test_importing_weekly_tracker_pulls_no_network_module() -> None:
     code = ("import sys\nbefore=set(sys.modules)\n"
             "import weekly_tracker, weekly_tracker.cli, weekly_tracker.render\n"
-            "new={m.split('.')[0] for m in set(sys.modules)-before}\n"
-            "print(sorted(new & {'socket','ssl','http','urllib','requests','httpx','asyncio'}))\n")
+            # Full dotted names: forbid network-capable modules but allow urllib.parse,
+            # which the stdlib pulls transitively on some platforms (no I/O).
+            "mods=set(sys.modules)-before\n"
+            "forbidden={'socket','ssl','requests','httpx','aiohttp','asyncio',"
+            "'http.client','urllib.request','urllib.error'}\n"
+            "print(sorted(mods & forbidden))\n")
     out = subprocess.run([sys.executable, "-c", code], cwd=REPO, capture_output=True,
                          text=True, check=False, timeout=60)
     assert out.returncode == 0, out.stderr

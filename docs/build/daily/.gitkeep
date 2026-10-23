@@ -1,0 +1,5 @@
+# Daily driver report output directory.
+#
+# `python3 -m asur.tools.daily_driver` writes one dated report here per run
+# (YYYY-MM-DD.md). These are generated health snapshots, not source. The driver
+# never commits them (ASUR-HUMAN-01) — a human reviews and, if desired, commits.

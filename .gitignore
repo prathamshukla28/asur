@@ -4,8 +4,8 @@ __pycache__/
 *$py.class
 *.egg-info/
 .eggs/
-build/
-dist/
+/build/          # setuptools build dir (root only — NOT docs/build/, which is source)
+/dist/
 *.egg
 
 # Virtual environments
@@ -38,6 +38,10 @@ htmlcov/
 outputs/
 edit_out/
 render_out/
+
+# Daily-driver reports are generated snapshots, not source (see docs/build/daily/.gitkeep).
+# Keep the directory (via .gitkeep) but never commit the dated reports.
+docs/build/daily/*.md
 
 # `asur render` media workspace + per-project artifact store (see MAP.md)
 youtube/
