@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  macOS launchd template for the ASUR daily development driver.
-
-  This is a TEMPLATE. It is NOT installed automatically (that would be a settings
-  change — AGENTS.md section 11 human gate). To use it, a human must:
-
-    1. Edit the two REPLACE_ME paths below:
+  macOS launchd template for the AS
+  
+  :
          - the repo root (the directory with pyproject.toml and the asur/ package)
          - the Python interpreter (use the project venv's python if you made one)
     2. Copy it into your LaunchAgents directory:

@@ -77,6 +77,180 @@ gate.
   stdlib, offline regression guard that reads `ci.yml` and asserts the phantom
   path never returns and every forbidden target name is covered.
 
+### Fixed — review fixes 2 (LM06–LM10 + weekly_tracker)
+- **Security (LM11, high):** `weekly_tracker` refuses repositories whose local git config
+  could run commands (fsmonitor, pagers, hooks, editors, filters, textconv, includes, …),
+  checked by reading the config as text before any git subprocess (`sources/git_guard.py`).
+- LM12 `csv.Error` → BLOCK (CLI exit 2, no traceback); F1 NAV file without scheme rows →
+  BLOCK; F2 `debit_is_negative` must be a boolean; F3 decimal-comma amounts rejected; F4 tax
+  year not covered → no result; F5 bad meal/benchmark values → BLOCK instead of a crash;
+  F6 `age` through offer/course paths; F7 progression that cannot/need not progress → HOLD;
+  F8 NAV valuations never overwritten; F9 missing WHO rule → HOLD; F10 retired habits hidden;
+  F11 amino-acid percent rounded once; F12 circular sleep SD; F13 git rename paths; F14
+  decisions bucketed in local/`--tz` time; F15 CLI number parsing; F16 declared current-job
+  cost facts; F17 14-day sleep window; plan/option redaction; scanner on weekly Markdown.
+  SPEC-GAPs LM-G55..LM-G61, WT-G9..WT-G12.
+
+### Added — LM09 (reports + CLI) and LM10 (local-file integrations)
+- **`life_mentor/reports/`**: finance, health, lifestyle, career, decisions and a linked
+  **life plan** report in Markdown — inputs with provenance, cited rules (UNVERIFIED flagged),
+  assumptions, result, gate status, questions, "what would change this", ≤ 3 actions per
+  section and ≤ 3 next steps overall; read-only, deterministic, redacted, scanner-checked,
+  plain-language disclaimers. Golden life-plan snapshot for a synthetic persona
+  (`tests/fixtures/lm_golden_life_plan.md`).
+- **`life-mentor` CLI** (`life_mentor/cli.py`, entry point added; `asur` and `weekly-tracker`
+  kept): `init`, `consent`, `fact`, `profile export|missing`, `tax`, `take-home`, `decide`,
+  `confirm`, `report`, `journal verify`, `import bank-csv|amfi-nav`. Exit 0 SHIP, 1 HOLD,
+  2 BLOCK/error; only `init` creates the store.
+- **`life_mentor/integrations/`**: bank/expense CSV → monthly totals by user categories
+  (dry run default, consent-gated apply, no descriptions stored); AMFI NAVAll.txt (user's own
+  file) → holdings valuation with exact header check and stale-NAV HOLD. Key-only journals.
+- `life_mentor/README.md` usage; CHARTER §9; SPEC-GAPs **LM-G46..LM-G54**; DEFERRED rows for
+  wearables, bank APIs and ICS export.
+
+### Added — Weekly Tracker (`weekly_tracker/`)
+- New top-level stdlib-only package and `weekly-tracker` CLI: one Markdown file per ISO week
+  (`2026-W41.md`) with a Mon–Sun table, Planner / Work (git) / Life Mentor sections and a
+  3–6 line factual summary (no ratings). `week.py` (ISO weeks incl. W53 and year edges),
+  `planner.py` (append-only hash-chained task log in `~/.weekly_tracker/`, carry-over listed
+  not moved), `sources/git_work.py` (read-only hardened `git log --numstat`, unavailable reasons
+  instead of crashes), `sources/life_mentor.py` (read-only, consent-respecting), `render.py`
+  (deterministic, final redaction pass), `cli.py` (`show`, `write` with no-overwrite unless
+  `--force`, `plan add/done/skip/move/list`). `HabitTracker.habit_history()` added
+  (read-only). pyproject include + entry point, CI import/mypy, `.gitignore`, boundary test
+  updated. SPEC-GAPs **WT-G1..WT-G8**; calendar sync deferred.
+
+### Added — LM07 (lifestyle + tracking) and LM08 (career)
+- **`life_mentor/lifestyle/`**: `plan_exercise`(`_from_profile`) builds a weekly structure
+  (labelled heuristic) and checks it per criterion against WHO 2020 adult guidelines
+  (`rules/activity_reference.json`, fetched this session); medical limitations/conditions →
+  HOLD "clear with your clinician or physiotherapist"; `check_activity`; `progression`
+  (≤ 10%/week heuristic). `analyze_sleep` vs the AASM/SRS 2015 ≥ 7 h consensus
+  (`rules/sleep_reference.json`): average duration, bedtime/wake SD (Decimal), flags,
+  persistent short sleep or symptoms → HOLD + clinician suggestion, no diagnosis.
+  `HabitTracker`: ≤ 3 active habits (4th → HOLD, not recorded), daily check-ins, streaks,
+  completion % — journaled, consent-gated.
+- **`life_mentor/tracking/`**: `MetricLog` — append-only hash-chained metric log (weight,
+  sleep, exercise, income, expenses, savings, net worth, debt, habit completion) with
+  per-metric consent and no silent overwrite (`correct` keeps history); `review` weekly /
+  monthly vs previous window and target, < 3 points → HOLD, "correlation is not causation".
+- **`life_mentor/career/`**: `career_snapshot`, `compare_job_offer` (LM04 take-home for both
+  packages, work costs, probation/risk, BATNA; worked example 12L vs 15L new regime →
+  Rs 1,00,000.00 vs Rs 1,16,875.00/month), `evaluate_education` (LM05 decision engine with
+  LM04 take-home uplift per scenario), `benchmark_summary` (user-cited sources only, HOLD
+  "insufficient market evidence"), `negotiation_prep` checklist.
+- `security/redact.py`: digit runs in URL paths (ISBNs) are kept; query strings still masked
+  (LM-G34). `finance/report.py` exposes `fixed_check`. SPEC-GAPs **LM-G34..LM-G45**.
+
+### Added — LM06 (Life Mentor health & nutrition) + LM-G21 tax year
+- **`life_mentor/health/`**: `usda.py` importer (stdlib csv; validates USDA FoodData Central
+  headers; amounts kept as strings → Decimal) and a bundled **39-food subset** of USDA SR
+  Legacy 2018-04 (CC0) generated from the official CSV zip
+  (`FoodData_Central_sr_legacy_food_csv_2018-04.zip`, sha256 `b80817294b88…6fd0`, recorded in
+  the bundle); `lookup_food`, `analyze_meal` (totals with fdc_ids, completeness flags),
+  `protein_target`(`_from_profile`) from the ICMR-NIN 2020 EAR 0.66 / RDA 0.83 g/kg/day,
+  `check_targets` review thresholds, `amino_acid_profile` (uncorrected, FAO 2013 Table 5
+  patterns, optional cited digestibility), `glycemic_load` (user-cited GI only; no GI table
+  bundled), `health_safety`(`_from_profile`) with cited NIH MedlinePlus/NIDDK flags (always
+  "discuss with your clinician", no dose advice, no diagnosis), cited evidence-classed notes.
+- Rule packs `rules/nutrition_reference.json` (values transcribed from PDFs fetched this
+  session, sha256 per value) and `rules/health_interactions.json`; all `verified_by_human:
+  false`.
+- **LM-G21 resolved:** `tax_year` parameter (`financial_year_for`, `financial_year_start`);
+  `rules_gate`/`rule_status` gain `effective_on` so staleness uses `as_of` and effectivity uses
+  the tax year. DEFERRED row removed. SPEC-GAPs **LM-G24..LM-G33**.
+
+### Fixed — Life Mentor review fixes (LM00–LM05)
+- Review fixes: journal head anchor detects tail truncation (H1); wider NFKC redaction incl.
+  dot/NBSP/slash separators, URL-aware (H2); `Fact.basis` redacted at construction and
+  `Fact.__repr__` hides value/basis (H3, L4); `Profile.export` journaled (M1); post-mkdir
+  lstat + realpath containment in the private store (M2, M3); rule-value nesting capped at 32
+  (L1); `.gitignore` excludes `.life_mentor/` (L2). Decision engine: money-losing options HOLD
+  at steps 6/7 and are never recommended (#1); missing facts → `insufficient_information` (#2);
+  upfront above the emergency fund → BLOCK (#3); profile-gate BLOCKs propagate (#4); Decimal
+  emergency-fund months honoured (#5); take-home reports validated (calculator, Decimal,
+  `as_of`) and `InputValue` is Decimal-only (#6); `record_confirmation` verifies the report
+  hash (#7); quarterly-vs-monthly compounding stated (#9); tax key renamed to
+  `tax_as_percent_of_taxable_income` (#10). #8 deferred (LM-G21). SPEC-GAPs LM-G19..LM-G23;
+  LM-G15/LM-G16 updated.
+
+### Added — LM05 (Life Mentor decision engine)
+- **`life_mentor/decision_engine/`**: `analyze_decision(option, situation=, rates=, as_of=,
+  alternatives=, store=)` runs the plan's 8-step affordability analysis (total cost; share of
+  take-home; essentials + emergency fund; benefit scenarios; downside + opportunity cost;
+  payback; versus alternatives; goal fit) on the proposal, every alternative, and an automatic
+  **do-nothing baseline** (keep the cash at a cited low-risk rate). Output: 8 criterion rows per
+  option, a side-by-side comparison, per-option and report `asur.core.gate` dispositions with
+  reasons, change-conditions (e.g. emergency-fund level or break-even monthly benefit), next
+  steps, assumptions, cited rules with UNVERIFIED flags, and a recommendation that names an
+  option clearing every check or says "insufficient information" / lists blockers. No score,
+  no ranking number; passes the LM02 report scanner.
+- `situation_from_profile` builds the cash-flow context from consented profile facts (via
+  `profile_gate`) and an optional LM04 `take_home` report (provenance `DERIVED`; a HOLD report
+  becomes UNKNOWN take-home). Decisions are journaled (ids/dispositions only) when a store is
+  given; `record_confirmation` journals a human's choice, refuses BLOCKed options, and never
+  executes anything.
+- Rule pack `life_mentor/rules/in_low_risk_rates_2026q3.json` (PPF 7.1, post office 1-year TD
+  6.9, post office savings 4.0; 2026-10-01..2026-12-31; tier secondary; not human-verified).
+- Hand-verified worked example (Rs 60,000 course, take-home 80,000, essentials 55,000, emergency
+  fund 3,00,000 vs 6-month target) in `tests/test_lm_decision.py`. SPEC-GAPs **LM-G12..LM-G18**.
+
+### Added — LM04 (Life Mentor finance calculators)
+- **Rule pack** `life_mentor/rules/in_income_tax_fy2026_27.json` (14 values, FY2026-27,
+  effective 2026-04-01..2027-03-31, retrieved 2026-10-11, `verified_by_human: false`):
+  new/old slabs and standard deductions (tier secondary), s.87A rebates (incometaxindia,
+  primary), old-regime senior/super-senior exemption limits, surcharge bands (new capped at
+  25%, old 37% above 5 Cr), surcharge marginal relief, 4% cess, s.288A/288B rounding
+  (Finance Act 2026 gazette). Each value carries `tax_year`, `act`, `act_section_1961`,
+  `act_section_2025` (null — not invented), `source_doc_id`, `refresh_cadence`,
+  `next_expected_change`.
+- **`life_mentor/finance/`**: `income_tax` / `take_home` / `income_tax_from_profile`
+  (new + old regime; every number read from the rule pack; rebate and surcharge marginal
+  relief; cess; rounding to Rs 10), `cash_flow`, `emergency_fund`, `net_worth`,
+  `debt_payoff` (avalanche + snowball side by side, bounded at 600 months, "never" when
+  payments do not outpace interest), `goal_sip` (conservative/base/optimistic returns as
+  assumptions or cited `RuleValue`s). Every report carries `inputs` (with provenance),
+  `rules_used` (source_url, retrieved_on, UNVERIFIED flag), `assumptions`, `result`, and an
+  `asur.core.gate` disposition (missing/UNKNOWN or stale/out-of-period → HOLD; negative or
+  contradictory → BLOCK), and passes the LM02 report scanner. Money is Decimal; floats
+  raise `TypeError`. No combined score.
+- All plan worked examples exact (`tests/test_lm_tax.py`); deterministic property sweeps
+  (Hypothesis not installed). SPEC-GAPs **LM-G7..LM-G11** (notably LM-G7: "post-tax income
+  never decreases" is false under the statute because cess applies on top of marginal
+  relief and the old-regime rebate has no marginal relief).
+
+### Added — LM00–LM03 (Life Mentor foundation, profile & consent, security, research)
+- **LM00 foundation:** new top-level stdlib-only package `life_mentor/` (display name
+  "Life Mentor") beside `asur/`, with `profile/`, `security/`, `research/` and documented
+  placeholder subpackages (`health/ finance/ career/ lifestyle/ decision_engine/ tracking/
+  reports/ integrations/`, each naming the phase it lands in); `life_mentor/rules/`
+  reserved for dated RulePacks; charter at `life_mentor/docs/CHARTER.md`.
+  `pyproject.toml` packages `life_mentor*` (+ charter/rule-pack package data); CI
+  import-check and mypy cover `life_mentor`; `tests/test_boundary.py` now lints every
+  `life_mentor` module for non-stdlib/network imports. SPEC-GAPs **LM-G1..LM-G6**; two
+  DEFERRED rows (encryption extra, network refresh CLI).
+- **LM01 profile & consent** (`life_mentor/profile/`): `Fact` with category
+  (identity/finance/health/career/lifestyle/goals) and provenance
+  (VERIFIED/USER_ESTIMATE/ASSUMPTION/UNKNOWN), floats rejected (Decimal for money);
+  `ConsentLedger` replayed from a hash-chained journal; `Profile.set_fact` raises
+  `ConsentRequired` without consent and never silently overwrites; `get`, `export`,
+  `correct`, `delete(category)` (journaled by key/count, never values);
+  `missing_facts` → questions; `profile_gate` → HOLD + questions on missing / UNKNOWN /
+  unconsented / ASSUMPTION facts, BLOCK on category contradiction.
+- **LM02 security** (`life_mentor/security/`): `PrivateStore` (root `~/.life_mentor`,
+  `LIFE_MENTOR_HOME`, or explicit; dirs 0700, files 0600, `O_EXCL` temp + `os.replace`
+  atomic writes, traversal/symlink/loose-root refusal); `Journal` — append-only JSONL
+  hash chain via `canonical_sha256` with `verify() -> (ok, first_bad_index)` and
+  refusal to append onto a broken chain; `redact()` for PAN/Aadhaar/phone/email/account
+  numbers (applied to every journal string); `find_forbidden`/`assert_report_clean`
+  report scanner (no `score` keys, no "guaranteed"/"risk-free", no raw PII).
+- **LM03 research** (`life_mentor/research/`): `SourceRecord` (tier primary|secondary,
+  ASUR evidence class); `load_rule_pack` (Decimal-only values; missing `source_url` or
+  any invalid field → `RulePackBlocked`/BLOCK); `rule_status`/`rules_gate` with explicit
+  `as_of` — stale or out-of-effect → HOLD, future `retrieved_on` → BLOCK, secondary or
+  not-human-verified → flagged UNVERIFIED (HOLD with `require_verified=True`);
+  `check_rule_pack_file` load-and-gate.
+
 ### Added — V1b (human-gated collector for the viral-check correlation study, G30)
 - **Collector CLI** (`studio/validation/collect.py`, SPEC-GAP **G30 V1b**): turns a
   human-prepared JSON clip list into the exact sealed dataset the V1a blind scorer

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd template: rebuild guides/ASUR-Engineering-Handbook.pdf every day.
+
+  The build reads counts, tables and gap statuses straight from the code, so a
+  daily rebuild keeps the handbook true to the repo. It writes ONE file (the
+  PDF). It makes NO git commits, NO push, NO network call.
+
+  To install:
+    1. Replace the three REPLACE_ME values below:
+         - the Python interpreter (one that has reportlab installed)
+         - the repo root (the directory with pyproject.toml and the asur/ package)
+         - your home directory, for the log path
+    2. cp scripts/com.asur.handbook.plist ~/Library/LaunchAgents/
+    3. launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.asur.handbook.plist
+    4. To stop it later:
+         launchctl bootout gui/$(id -u)/com.asur.handbook
+
+  Schedule: every day at 09:10 local time. If the Mac is asleep then, launchd
+  runs the job when it next wakes.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.asur.handbook</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/REPLACE_ME/bin/python3</string>
+        <string>guides/make_engineering_handbook.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/REPLACE_ME/asur</string>
+
+    <!-- launchd starts with a bare PATH; git must be findable for the Live status chapter. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>10</integer></dict>
+
+    <key>StandardOutPath</key>
+    <string>/REPLACE_ME_HOME/Library/Logs/asur-handbook.log</string>
+    <key>StandardErrorPath</key>
+    <string>/REPLACE_ME_HOME/Library/Logs/asur-handbook.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

@@ -51,3 +51,5 @@ archive/stray-*/
 # Generated / large media (never commit binaries to history)
 studio/lyric_video/project/
 lyric_video/project/
+.life_mentor/
+.weekly_tracker/

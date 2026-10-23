@@ -47,6 +47,9 @@ jobs:
           import sys
           before = set(sys.modules)
           import asur, asur.core, asur.script, asur.orchestrator, asur.tools, asur.viral_check, asur.learning  # noqa: F401
+          import life_mentor, life_mentor.profile, life_mentor.security, life_mentor.research  # noqa: F401
+          import life_mentor.cli, life_mentor.reports, life_mentor.integrations  # noqa: F401
+          import weekly_tracker, weekly_tracker.cli  # noqa: F401
           after = set(sys.modules)
           forbidden = {
               "torch", "diffusers", "transformers", "kokoro", "soundfile",

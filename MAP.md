@@ -57,6 +57,7 @@ python3 studio/lyric_video/ingest.py --help           # lyric video pipeline
 # Rebuild the guides
 python3 guides/make_brand_guide.py                    # -> guides/ASUR-Complete-Guide.pdf
 python3 guides/make_guide.py                          # -> guides/ASUR-Lyric-Video-Guide.pdf
+python3 guides/make_engineering_handbook.py           # -> guides/ASUR-Engineering-Handbook.pdf
 
 # Health
 python3 -m pytest -q

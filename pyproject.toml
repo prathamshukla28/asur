@@ -42,6 +42,8 @@ generation = [
 
 [project.scripts]
 asur = "asur.cli:main"
+weekly-tracker = "weekly_tracker.cli:main"
+life-mentor = "life_mentor.cli:main"
 
 [tool.mypy]
 # Blocking type gate for the stdlib-only core and the asur package (CI runs
@@ -52,7 +54,12 @@ ignore_missing_imports = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["asur*"]
+include = ["asur*", "life_mentor*", "weekly_tracker*"]
+
+# Ship Life Mentor's charter and dated RulePack JSON files with the package.
+[tool.setuptools.package-data]
+life_mentor = ["README.md", "docs/*.md", "rules/*.json", "rules/*.md", "health/data/*.json"]
+weekly_tracker = ["README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

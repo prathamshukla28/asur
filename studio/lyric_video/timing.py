@@ -75,6 +75,27 @@ def _read_lyrics(path: Path) -> list[list[str]]:
     return lines
 
 
+def _load_audio(path: Path):  # pragma: no cover - heavy dep, lazy
+    """Load a WAV as (torch float tensor [channels, samples], sample_rate).
+
+    torchaudio 2.11 routes torchaudio.load through torchcodec (not installed here),
+    so we read with soundfile instead and hand torch a plain tensor.
+    """
+    import soundfile as sf
+    import torch
+
+    data, sr = sf.read(str(path), dtype="float32", always_2d=True)  # (samples, channels)
+    wav = torch.from_numpy(data.T).contiguous()  # -> (channels, samples)
+    return wav, sr
+
+
+def _save_audio(path: Path, wav, sr: int) -> None:  # pragma: no cover - heavy dep, lazy
+    """Write a torch float tensor [channels, samples] to WAV via soundfile."""
+    import soundfile as sf
+
+    sf.write(str(path), wav.detach().cpu().numpy().T, sr)  # soundfile wants (samples, channels)
+
+
 def _isolate_vocal(song: Path, work: Path) -> Path:
     """Demucs htdemucs -> keep the vocal stem, resampled to 16 kHz mono."""
     import torch  # pragma: no cover - heavy dep, lazy
@@ -82,7 +103,7 @@ def _isolate_vocal(song: Path, work: Path) -> Path:
     from demucs.apply import apply_model  # pragma: no cover
     from demucs.pretrained import get_model  # pragma: no cover
 
-    wav, sr = torchaudio.load(str(song))
+    wav, sr = _load_audio(song)
     if wav.shape[0] == 1:  # demucs wants stereo
         wav = wav.repeat(2, 1)
     model = get_model("htdemucs")
@@ -94,7 +115,7 @@ def _isolate_vocal(song: Path, work: Path) -> Path:
     if sr != SAMPLE_RATE:
         vocal = torchaudio.functional.resample(vocal, sr, SAMPLE_RATE)
     out = work / "vocals16k.wav"
-    torchaudio.save(str(out), vocal, SAMPLE_RATE)
+    _save_audio(out, vocal, SAMPLE_RATE)
     return out
 
 
@@ -123,7 +144,7 @@ def _align(vocal: Path, roman_lines: list[list[str]]) -> list[tuple[float, float
     tokenizer = bundle.get_tokenizer()
     aligner = bundle.get_aligner()
 
-    waveform, sr = torchaudio.load(str(vocal))
+    waveform, sr = _load_audio(vocal)
     if sr != bundle.sample_rate:
         waveform = torchaudio.functional.resample(waveform, sr, bundle.sample_rate)
 
