@@ -17,6 +17,7 @@ from asur.core.identity import Identity
 from asur.tools.projection import (
     VIRAL_FORBIDDEN,
     FirewallLeak,
+    assert_view_clean,
     build_generation_view,
     build_viral_view,
     conformance_scan,
@@ -289,3 +290,55 @@ def test_ci_firewall_grep_guard_targets_real_dirs():
     # (c) the guard must cover the full VIRAL_FORBIDDEN target set.
     for token in VIRAL_FORBIDDEN:
         assert token in ci_text, f"CI guard omits forbidden target name {token!r}"
+
+
+# -- structural (not repr-grep) conformance over the exact view -------------
+
+def test_assert_view_clean_passes_on_a_clean_viral_view():
+    """The render-time structural assertion accepts a clean VIRAL_VIEW."""
+    view = build_viral_view(
+        bundle_hashes={"final.mp4": "sha256:abc"},
+        provenance={"model": "FFmpeg", "render_cost_usd": 0},
+        platform_facts={"aspect_ratio": "9:16"},
+        rubric_metadata={"lane": "viral", "binding": "run-1"},
+    )
+    assert_view_clean(view)  # must not raise
+
+
+def test_assert_view_clean_selects_forbidden_set_by_view_tag():
+    """A GENERATION_VIEW is checked against the generation playbook, not viral's.
+
+    A GENERATION_VIEW may legitimately carry 'quality_floors' (a VIRAL_FORBIDDEN
+    token). The structural assertion must pick the forbidden set from the view
+    tag, so the floors pass here but a viral-side token would not.
+    """
+    view = build_generation_view(
+        brief={"subject": "x"},
+        hooks={"selected": "h1"},
+        quality_floors={"min_captions": True},
+        cost_policy={"budget_usd": 0},
+    )
+    assert_view_clean(view)  # quality_floors is fine on the GENERATION side
+
+
+def test_assert_view_clean_fails_closed_on_a_nested_leak():
+    """ASUR-FIREWALL-01: a forbidden name buried deep in the data is still caught.
+
+    This is the win over grepping ``repr()``: the walk is over the real
+    structure, so a leak nested inside a list inside a dict fails closed.
+    """
+    leaky = {
+        "view": "VIRAL_VIEW",
+        "bundle_hashes": {"final.mp4": "sha256:abc"},
+        "provenance": {"notes": [{"deep": {"per_dimension_target": 90}}]},
+        "platform_facts": {},
+        "rubric_metadata": {},
+    }
+    with pytest.raises(FirewallLeak):
+        assert_view_clean(leaky)
+
+
+def test_assert_view_clean_rejects_an_unknown_view_tag():
+    """An unrecognised view tag fails closed rather than passing unchecked."""
+    with pytest.raises(FirewallLeak):
+        assert_view_clean({"view": "MYSTERY_VIEW", "data": {}})

@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from ..core.envelope import Artifact
+from .provenance import validate_produced_assets
 
 __all__ = ["produce_assets"]
 
@@ -105,10 +106,15 @@ def produce_assets(
         elif media_type == "audio_music":
             music = file_path
 
-    return {
+    result = {
         "backgrounds": backgrounds,
         "voice": voice,
         "music": music,
         "assets": assets,
         "skipped": skipped,
     }
+    # ASUR-PROV-01 made real: every produced asset must carry the complete
+    # provenance+license block the pipeline relies on. Fail closed (never return
+    # a partial set with a black-box asset) before the render composites them.
+    validate_produced_assets(result)
+    return result

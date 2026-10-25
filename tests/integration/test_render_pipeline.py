@@ -25,7 +25,11 @@ from asur.script.idea import build_idea
 from asur.script.research import build_research
 from asur.script.script_builder import build_script
 from asur.script.strategy import build_strategy
-from asur.tools.projection import VIRAL_FORBIDDEN, FirewallLeak, build_viral_view
+from asur.tools.projection import (
+    FirewallLeak,
+    assert_view_clean,
+    build_viral_view,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -204,6 +208,10 @@ def test_firewall_holds_on_a_real_render_artifact(chain, tmp_path):
     resulting view is asserted clean of every VIRAL_FORBIDDEN name
     (ASUR-FIREWALL-01). This exercises the actual projection path on real output
     rather than re-checking a fixture dict.
+
+    The conformance here is STRUCTURAL: ``assert_view_clean`` walks the real
+    view data structure (every key and string value, at any depth), not a
+    ``repr()`` blob that truncation or a custom ``__repr__`` could hide a leak in.
     """
     art = build_final_render(chain["edit_plan"], PROJECT_ID, out_root=str(tmp_path))
 
@@ -213,9 +221,8 @@ def test_firewall_holds_on_a_real_render_artifact(chain, tmp_path):
         platform_facts={"aspect_ratio": "9:16", "has_captions": True},
         rubric_metadata={"lane": "viral", "binding": "run-x"},
     )
-    blob = repr(view).casefold()
-    for forbidden in VIRAL_FORBIDDEN:
-        assert forbidden.casefold() not in blob
+    # Structural conformance over the exact view the evaluator would receive.
+    assert_view_clean(view)
 
 
 def test_firewall_fails_closed_if_a_target_leaks_into_provenance(chain, tmp_path):

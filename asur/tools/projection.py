@@ -37,6 +37,7 @@ __all__ = [
     "GENERATION_FORBIDDEN",
     "VIRAL_FORBIDDEN",
     "FirewallLeak",
+    "assert_view_clean",
     "build_generation_view",
     "build_viral_view",
     "conformance_scan",
@@ -105,6 +106,37 @@ def conformance_scan(view: dict, forbidden: frozenset) -> None:
                     f"forbidden field '{bad}' leaked into projection "
                     f"(found in '{token}'); ASUR-FIREWALL-01 fails closed"
                 )
+
+
+# The forbidden set that binds to each view, keyed by its "view" tag. Used by
+# the render-time structural conformance assertion below.
+_FORBIDDEN_BY_VIEW = {
+    "GENERATION_VIEW": GENERATION_FORBIDDEN,
+    "VIRAL_VIEW": VIRAL_FORBIDDEN,
+}
+
+
+def assert_view_clean(view: dict) -> None:
+    """Structural firewall conformance over the EXACT view a lane receives.
+
+    Unlike grepping ``repr(view)`` (which can be fooled by truncation or a custom
+    ``__repr__``), this walks the real data structure - every key and every
+    string value, at any depth - via :func:`conformance_scan`, and fails closed
+    (``FirewallLeak``) if any forbidden name for this view's side appears. It
+    selects the forbidden set from the view's own ``"view"`` tag, so the right
+    playbook is always the one withheld (ASUR-FIREWALL-01).
+
+    This is the assertion to run at the hand-off point, on the exact projection
+    the evaluator or generator will consume - not on a synthetic copy.
+    """
+    tag = view.get("view")
+    forbidden = _FORBIDDEN_BY_VIEW.get(tag) if isinstance(tag, str) else None
+    if forbidden is None:
+        raise FirewallLeak(
+            f"cannot assert firewall conformance: unknown view tag {tag!r} "
+            "(expected GENERATION_VIEW or VIRAL_VIEW); fails closed"
+        )
+    conformance_scan(view, forbidden)
 
 
 def build_generation_view(

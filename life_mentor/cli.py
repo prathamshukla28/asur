@@ -146,6 +146,13 @@ def _parser() -> argparse.ArgumentParser:
     jr = sub.add_parser("journal").add_subparsers(dest="action", required=True)
     jr.add_parser("verify")
 
+    hab = sub.add_parser("habits", help="active-habit tools").add_subparsers(
+        dest="action", required=True
+    )
+    hics = hab.add_parser("ics", help="export active habits to a .ics calendar (local)")
+    hics.add_argument("--out", help="output .ics file (default: stdout)")
+    hics.add_argument("--force", action="store_true", help="overwrite an existing file")
+
     imp = sub.add_parser("import").add_subparsers(dest="action", required=True)
     b = imp.add_parser("bank-csv", help="bank/expense CSV (dry run unless --apply)")
     b.add_argument("file")
@@ -411,6 +418,25 @@ def _cmd_import(args: argparse.Namespace, store: PrivateStore, as_of: date,
     return _emit(markdown, disp)
 
 
+def _cmd_habits(args: argparse.Namespace, store: PrivateStore) -> int:
+    """Export the active habit schedule to a local .ics file (LM-G54).
+
+    Reading habits requires ``lifestyle`` consent (enforced by the tracker). No
+    network, no account: it writes a file you import yourself (ASUR-LOCAL-01).
+    """
+    from .lifestyle.habit_ics import habits_to_calendar
+    from .lifestyle.habits import HabitTracker
+
+    tracker = HabitTracker(store)
+    text = habits_to_calendar(tracker.habit_history())
+    if args.out:
+        _write_new(Path(args.out), text, args.force)
+        print(args.out)
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     home = resolve_home(args.home)
     as_of = args.as_of or datetime.now(timezone.utc).astimezone().date()
@@ -448,6 +474,8 @@ def _run(args: argparse.Namespace) -> int:
         return _cmd_report(args, prof, as_of, generated)
     if args.cmd == "journal":
         return _cmd_journal(store)
+    if args.cmd == "habits":
+        return _cmd_habits(args, store)
     return _cmd_import(args, store, as_of, generated)
 
 

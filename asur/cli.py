@@ -364,6 +364,220 @@ def _run_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_explain(args: argparse.Namespace) -> int:
+    """Print the explainable decision trail for a project's SCRIPT artifacts.
+
+    Read-only (ASUR-EXPLAIN-01): it walks the versioned pipeline artifacts
+    (SCRIPT through LEARNING) and surfaces, for each, its provenance (version,
+    id, checksum, lineage) and the reasons it recorded. It never writes and is a
+    human-facing view of the human's own workspace, not a cross-lane channel, so
+    it is outside the GENERATION <-> VIRAL CHECK firewall (ASUR-HUMAN-01). Exit 0
+    if the full chain is present, 1 if some stages are not produced yet (fail
+    closed).
+    """
+    from .tools.explain import build_explanation
+
+    resolved = _resolve_project(args)
+    if isinstance(resolved, int):
+        return resolved
+    project_root, project_id = resolved
+
+    try:
+        ws = Workspace(project_root, project_id).ensure()
+    except WorkspaceError as exc:
+        _emit(f"error: could not open workspace: {exc}")
+        return 2
+
+    report = build_explanation(ws)
+
+    _emit("ASUR EXPLAIN - why each SCRIPT decision was made (read-only)")
+    _emit(f"  project : {project_id}")
+    _emit(f"  root    : {project_root / '.script'}")
+    _emit()
+
+    if not report["entries"]:
+        _emit("No SCRIPT artifacts found yet. Run `asur script --idea ...` first.")
+        return 1
+
+    for entry in report["entries"]:
+        _emit(
+            f"[{entry['version']:>2}] {entry['kind']:<9} {entry['artifact_id']}"
+            f"  ({entry['status']})"
+        )
+        if entry["headline"]:
+            _emit(f"     what : {entry['headline']}")
+        if entry.get("selected_hook"):
+            _emit(f"     hook : \"{entry['selected_hook']}\"")
+        if entry["sources"]:
+            _emit(f"     from : {', '.join(entry['sources'])}")
+        _emit(f"     hash : {entry['checksum']}")
+        for reason in entry["reasons"]:
+            _emit(f"     why  : {reason}")
+        _emit()
+
+    if report["missing"]:
+        _emit(f"Not produced yet: {', '.join(report['missing'])}")
+        _emit("The trail is explainable as far as the pipeline has run (fail closed).")
+        return 1
+
+    _emit("Every SCRIPT stage is present and carries a recorded reason (ASUR-EXPLAIN-01).")
+    return 0
+
+
+def _run_verify_repro(args: argparse.Namespace) -> int:
+    """Rebuild each stored SCRIPT stage and confirm byte-identical checksums.
+
+    ASUR-VERSION-01 / ASUR-HONEST-01: proves "same inputs -> same checksums".
+    Exit 0 only if every present stage reproduced; a mismatch fails closed
+    (exit 1) because it means non-determinism or a tampered artifact.
+    """
+    from .tools.verify_repro import verify_reproducible
+
+    resolved = _resolve_project(args)
+    if isinstance(resolved, int):
+        return resolved
+    project_root, project_id = resolved
+
+    try:
+        ws = Workspace(project_root, project_id).ensure()
+    except WorkspaceError as exc:
+        _emit(f"error: could not open workspace: {exc}")
+        return 2
+
+    report = verify_reproducible(ws)
+
+    _emit("ASUR VERIFY-REPRO - rebuild the SCRIPT chain, compare checksums")
+    _emit(f"  project : {project_id}")
+    _emit()
+
+    if not report["stages"]:
+        _emit("No SCRIPT artifacts found to verify. Run `asur script --idea ...` first.")
+        return 1
+
+    for stage in report["stages"]:
+        if stage["match"] is None:
+            mark = "skip"
+        elif stage["match"]:
+            mark = "ok  "
+        else:
+            mark = "DIFF"
+        _emit(f"  [{mark}] {stage['kind']:<18} {stage['stored_checksum']}")
+        if stage["match"] is None:
+            _emit(f"         note    : {stage['note']}")
+        elif not stage["match"]:
+            _emit(f"         rebuilt -> {stage['rebuilt_checksum']}")
+            _emit(f"         note    : {stage['note']}")
+
+    _emit()
+    if report["disposition"] == SHIP:
+        _emit("Result: every stored SCRIPT stage reproduced byte-for-byte.")
+        _emit("Same inputs produced the same checksums (ASUR-VERSION-01/HONEST-01).")
+        return 0
+    _emit(f"  disposition : {HOLD} (NOT_REPRODUCIBLE)")
+    _emit("Result: at least one stage did not reproduce - fail closed. A mismatch")
+    _emit("means the stage is non-deterministic or a stored artifact was altered.")
+    return 1
+
+
+def _run_insights(args: argparse.Namespace) -> int:
+    """Show the learning loop made visible: what has worked for THIS creator.
+
+    Read-only aggregation of the project's hook memory (ASUR-LOCAL-01). Every
+    line is EMPIRICAL (this creator's own data) and there is no aggregate score
+    or '% viral' (ASUR-HONEST-01). Exit 0 always (it is a report, not a gate);
+    an empty memory is reported honestly, not as an error.
+    """
+    from .learning.insights import build_insights
+
+    resolved = _resolve_project(args)
+    if isinstance(resolved, int):
+        return resolved
+    project_root, project_id = resolved
+
+    report = build_insights(project_root, project_id)
+    totals = report["totals"]
+
+    _emit("ASUR INSIGHTS - what has worked for you (EMPIRICAL, no score)")
+    _emit(f"  project : {project_id}")
+    _emit(
+        f"  memory  : {totals['records']} hook record(s), "
+        f"{totals['published']} published, "
+        f"{totals['with_measured_performance']} with measured performance"
+    )
+    _emit()
+
+    if report["by_direction"]:
+        _emit("By hook direction:")
+        for row in report["by_direction"]:
+            avg = row["avg_completion"]
+            avg_text = f"{avg}% avg completion" if avg is not None else "no measured result yet"
+            _emit(
+                f"  - {row['direction']:<14} seen {row['seen']}, "
+                f"published {row['published']} ({avg_text})"
+            )
+        _emit()
+
+    _emit("Learnings (this creator's own data):")
+    for learning in report["learnings"]:
+        _emit(f"  - {learning['text']}")
+        if learning.get("basis"):
+            _emit(f"      basis: {learning['basis']}")
+    _emit()
+    _emit(f"Next experiment: {report['next_experiment']}")
+    return 0
+
+
+def _run_ab_resolve(args: argparse.Namespace) -> int:
+    """Resolve the hook A/B experiment from MEASURED performance (SPEC-GAP G2).
+
+    Loads the latest hooks artifact + hook memory and declares a winner only
+    when at least two variants carry a real measured result; otherwise it HOLDs
+    (exit 1) rather than imply a winner it cannot measure (ASUR-HONEST-01).
+    """
+    from .learning.ab_resolution import resolve_ab_experiment
+    from .script.hook_memory import HookMemory
+
+    resolved = _resolve_project(args)
+    if isinstance(resolved, int):
+        return resolved
+    project_root, project_id = resolved
+
+    try:
+        ws = Workspace(project_root, project_id).ensure()
+    except WorkspaceError as exc:
+        _emit(f"error: could not open workspace: {exc}")
+        return 2
+
+    hooks = ws.load_latest("hooks")
+    if hooks is None:
+        _emit(f"  disposition : {HOLD} (NO_HOOKS)")
+        _emit("No hooks artifact found. Run `asur script --idea ...` first.")
+        return 1
+
+    report = resolve_ab_experiment(hooks, HookMemory(project_root).all_records())
+
+    _emit("ASUR AB-RESOLVE - measured winner among hook variants")
+    _emit(f"  project : {project_id}")
+    _emit()
+    for row in report["variants"]:
+        comp = row["measured_completion"]
+        comp_text = f"{comp}% completion" if comp is not None else "no measured result"
+        _emit(f"  {row['variant']} ({row['direction']:<12}) {comp_text}")
+        _emit(f"      \"{row['chosen_hook']}\"")
+    _emit()
+
+    if report["status"] == "resolved":
+        win = report["winner"]
+        _emit(
+            f"Measured winner: variant {win['variant']} ({win['direction']}) "
+            f"at {win['measured_completion']}% completion."
+        )
+        return 0
+    _emit(f"  disposition : {HOLD} (INSUFFICIENT_DATA)")
+    _emit(f"  reason      : {report['reason']}")
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="asur",
@@ -439,6 +653,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target platform (instagram_reels|youtube_shorts|youtube_long). Default: instagram_reels.",
     )
     render_p.set_defaults(func=_run_render)
+
+    explain_p = sub.add_parser(
+        "explain",
+        help="Show why each SCRIPT decision was made, with provenance (read-only).",
+    )
+    explain_p.add_argument("--project", default=".", help="Project directory. Default: current dir.")
+    explain_p.add_argument("--project-id", default=None, help="Explicit project id. Default: dir name.")
+    explain_p.set_defaults(func=_run_explain)
+
+    verify_p = sub.add_parser(
+        "verify-repro",
+        help="Rebuild the SCRIPT chain and confirm byte-identical checksums (local).",
+    )
+    verify_p.add_argument("--project", default=".", help="Project directory. Default: current dir.")
+    verify_p.add_argument("--project-id", default=None, help="Explicit project id. Default: dir name.")
+    verify_p.set_defaults(func=_run_verify_repro)
+
+    insights_p = sub.add_parser(
+        "insights",
+        help="Show what has worked for this creator from measured performance (read-only).",
+    )
+    insights_p.add_argument("--project", default=".", help="Project directory. Default: current dir.")
+    insights_p.add_argument("--project-id", default=None, help="Explicit project id. Default: dir name.")
+    insights_p.set_defaults(func=_run_insights)
+
+    ab_p = sub.add_parser(
+        "ab-resolve",
+        help="Pick the measured-winner hook variant from real performance (local).",
+    )
+    ab_p.add_argument("--project", default=".", help="Project directory. Default: current dir.")
+    ab_p.add_argument("--project-id", default=None, help="Explicit project id. Default: dir name.")
+    ab_p.set_defaults(func=_run_ab_resolve)
 
     return parser
 

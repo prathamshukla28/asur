@@ -48,14 +48,11 @@ without the extra and never run in CI) — not something CI pretends to do.
 
 | Obligation | Stated in | Enforced today | Needs |
 | --- | --- | --- | --- |
-| Firewall holds on a **real** run (VIRAL_VIEW strips named targets) | ASUR-FIREWALL-01 | Unit tests + one integration test that greps the view's `repr` for forbidden tokens; CI greps source for the target names. | A structural (not repr-grep) conformance assertion over the exact projection the evaluator receives at render time. |
-| Every asset carries complete provenance + license | ASUR-PROV-01 | The FFmpeg adapter returns a provenance+license dict; the license guard fails closed on trapped models. | Schema-validate that *every* produced asset (once real adapters land) carries the full block, not just the renderer's. |
 | Two human gates (hero-proof stage 18, publish stage 25) | ASUR-HUMAN-01 | Honored in code paths via `approval_gate`. On a solo machine producer == approver, so it records `HOLD:SELF_APPROVED` (honest, not a fake pass). | A second real local identity to reach a true distinct-approver `SHIP`. Single-user self-approval is intended, not a bypass. |
 | Life Mentor encryption at rest | Life Mentor CHARTER §3 (SPEC-GAP LM-G1) | macOS FileVault + 0700/0600 permissions + refusal of loose/symlinked store roots. Data files themselves are plaintext JSON. | An optional `cryptography` extra (authenticated encryption of `~/.life_mentor`) — new dependency, needs a human gate. |
-| Weekly Tracker calendar sync | User request "weekly calendar" (SPEC-GAP WT-G8) | Weekly Markdown files only; no Google/Outlook/ICS export or sync. | Opt-in integration in LM10 behind a human gate (network, accounts). |
+| Weekly Tracker calendar **network sync** | User request "weekly calendar" (SPEC-GAP WT-G8) | Local `.ics` export now ships (`weekly-tracker plan ics`, stdlib `weekly_tracker/ics.py`); the planner also still writes Markdown. No Google/Outlook network sync. | Opt-in two-way network sync behind a human gate (network, accounts) — deliberately not built; the local `.ics` file is imported by hand. |
 | Life Mentor wearable / health-platform import | LM10 brief (Apple Health, Google Fit, wearables) | Nothing imported; health metrics are entered by hand or via the metric log. | Opt-in local-export parsers behind a human gate; no account linking. |
 | Life Mentor bank / account-aggregator APIs | LM10 brief | Only user-downloaded CSV statements are imported (`life-mentor import bank-csv`). | Network + credentials: needs a human gate and a security review; not planned without one. |
-| Life Mentor ICS export (habits / planner) | LM10 brief (optional), SPEC-GAP LM-G54 | No `.ics` output. | A stdlib ICS writer for the weekly planner and habit schedule, together with WT-G8. |
 | Life Mentor rule-value refresh | Life Mentor CHARTER §2 LM-RULE (SPEC-GAP LM-G4) | RulePacks are edited by hand; `rules_gate` HOLDs stale values and flags unverified ones. Nothing fetches updates. | An explicit, human-run network refresh CLI (never implicit, never in tests); MoSPI CPI needs a token so stays manual. |
 
 ---

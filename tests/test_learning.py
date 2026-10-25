@@ -236,6 +236,49 @@ def test_loop_closes_published_hook_informs_next_run(tmp_path):
     assert hook_text in next_hooks.body.get("prior_hooks", prior) or hook_text in prior
 
 
+def test_loop_measured_hook_demonstrably_shifts_next_evaluation(tmp_path):
+    """ASUR-HONEST-01: a measured, published hook provably changes the next run.
+
+    The existing loop test proves the hook *reaches* memory. This proves the
+    stronger claim - that LEARNING actually learns: once the published hook is
+    folded in with its real result, the very same hook is scored differently on
+    the next run (fatigue rises, originality drops to derivative). That shift is
+    caused solely by the ingested measurement, which is what closes the loop.
+    """
+    chain = _full_chain()
+    pp = build_publish_package(
+        chain["edit_plan"], chain["viral"], PROJECT_ID, title="t", caption="c",
+    )
+    perf = build_performance(pp, {"completion_pct": 70}, PROJECT_ID)
+    hook_text = _selected_hook_text(chain["hooks"])
+
+    def _scored(hooks_artifact, text):
+        for hook in hooks_artifact.body["hooks"]:
+            if hook["metadata"]["hook"] == text:
+                return hook
+        raise AssertionError("hook not found in ranked list")
+
+    # Baseline: first run, empty memory - no cross-run fatigue, not yet derivative.
+    before = _scored(chain["hooks"], hook_text)
+    assert before["hook_fatigue_score"] == 12
+    assert before["originality"]["verdict"] != "derivative"
+
+    # Close the loop: fold the published hook (with its measured result) in.
+    fold_hook_into_memory(
+        tmp_path, hook_text=hook_text, project_id=PROJECT_ID,
+        performance_artifact=perf,
+    )
+    prior = HookMemory(tmp_path).prior_hook_texts()
+    assert hook_text in prior
+
+    # Next run sees the measured reality and scores the same hook differently.
+    next_hooks = build_hooks(chain["strategy"], PROJECT_ID, prior_hooks=prior)
+    after = _scored(next_hooks, hook_text)
+    assert after["hook_fatigue_score"] > before["hook_fatigue_score"]
+    assert after["hook_fatigue_score"] == 80
+    assert after["originality"]["verdict"] == "derivative"
+
+
 # --- G: publish is a real human gate --------------------------------------
 
 def test_publish_gate_holds_without_approver():

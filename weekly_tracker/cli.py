@@ -69,6 +69,10 @@ def _parser() -> argparse.ArgumentParser:
     move.add_argument("--day", required=True, type=_day)
     move.add_argument("--week")
     psub.add_parser("list", help="list tasks of a week").add_argument("--week")
+    ics = psub.add_parser("ics", help="export a week's tasks to a .ics calendar file")
+    ics.add_argument("--week")
+    ics.add_argument("--out", help="output .ics file (default: stdout)")
+    ics.add_argument("--force", action="store_true", help="overwrite an existing file")
     return p
 
 
@@ -114,6 +118,18 @@ def _run(args: argparse.Namespace, today: date) -> int:
         elif cmd == "move":
             task = planner.move(args.task_id, _week(args.week, today), args.day)
             print(f"{task.task_id} moved to {task.week} {task.day}")
+        elif cmd == "ics":
+            from .ics import planner_to_calendar
+            text = planner_to_calendar(planner.tasks(_week(args.week, today)))
+            if args.out:
+                target = Path(args.out).expanduser()
+                if target.exists() and not args.force:
+                    print(f"{target} exists; use --force to overwrite", file=sys.stderr)
+                    return 1
+                _write_out(target, text.encode("utf-8"), args.force)
+                print(target)
+            else:
+                sys.stdout.write(text)
         else:
             for t in planner.tasks(_week(args.week, today)):
                 print(f"{t.task_id}\t{t.day}\t{t.status}\t{t.text}")
