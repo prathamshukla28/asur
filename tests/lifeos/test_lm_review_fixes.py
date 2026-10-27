@@ -43,7 +43,7 @@ D = Decimal
 AS_OF = date(2026, 10, 11)
 NOW = "2026-10-11T00:00:00Z"
 ME = Identity("tester", "Test User", "")
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent.parent.parent
 
 
 @pytest.fixture(scope="module")

@@ -128,6 +128,10 @@ Build/governance docs:
 - [`docs/adr/README.md`](docs/adr/README.md) — architecture decision records.
 - [`docs/design/DESIGN_SPEC.md`](docs/design/DESIGN_SPEC.md) — CLI UX + rendered-video design system.
 
+This repository also hosts two **separate products** that reuse ASUR's stdlib-only
+core primitives but are not part of the content pipeline: **Life Mentor** and
+**Weekly Tracker**, under [`products/`](products/README.md).
+
 ---
 
 ## Setup

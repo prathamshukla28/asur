@@ -1,4 +1,4 @@
-# life_mentor/rules
+# products/life_mentor/rules
 
 Reserved for dated RulePack JSON files (loaded by `life_mentor.research.load_rule_pack`).
 LM04 adds `in_income_tax_fy2026_27.json`. Every value must carry `source_url`,

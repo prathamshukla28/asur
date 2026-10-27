@@ -1,7 +1,7 @@
 # Life Mentor — Charter
 
-Life Mentor is a local-first, stdlib-only Python package (`life_mentor/`) that lives
-beside ASUR in this repository and inherits the ASUR constitution (`AGENTS.md`). It
+Life Mentor is a local-first, stdlib-only Python package (`products/life_mentor/`,
+imported as `life_mentor`) that lives beside ASUR in this repository and inherits the ASUR constitution (`AGENTS.md`). It
 helps **one person** reason about their own finances, health habits, career, and
 lifestyle. It is an explainer and a checklist, not an oracle.
 
@@ -145,7 +145,7 @@ Approved plan: `.omo/plans/life-mentor.md` (human-approved 2026-10-11).
   defaulted. Reports are read-only, deterministic (`as_of`, `generated_on`), redacted, and
   must pass the LM02 scanner. Plain-language disclaimers: not tax/investment/legal advice;
   not medical advice and no diagnosis; Life Mentor never executes a decision.
-- **CLI** (`life-mentor`, see `life_mentor/README.md`): exit 0 SHIP, 1 HOLD, 2 BLOCK/error.
+- **CLI** (`life-mentor`, see `products/life_mentor/README.md`): exit 0 SHIP, 1 HOLD, 2 BLOCK/error.
   Only `init` creates the store; every other command refuses (exit 2) if it is missing.
   `confirm` records your choice and never executes it.
 - **Local integrations** (opt-in, no network): bank/expense CSV → monthly totals by your
@@ -159,16 +159,16 @@ Approved plan: `.omo/plans/life-mentor.md` (human-approved 2026-10-11).
 
 | Path | Phase | Contents |
 |------|-------|----------|
-| `life_mentor/security/` | LM02 | private store, hash-chained journal, redaction, report scanner |
-| `life_mentor/profile/` | LM01 | facts with provenance, consent ledger, profile store, missing-fact gate |
-| `life_mentor/research/` | LM03 | `SourceRecord`, `RulePack` loader, staleness gate |
-| `life_mentor/rules/` | LM04–LM07 | dated RulePack JSON files (tax, low-risk rates, nutrition, health interactions, activity, sleep) |
-| `life_mentor/finance/` | LM04 | income tax + take-home, cash flow, emergency fund, debt payoff, goal SIP, net worth |
-| `life_mentor/decision_engine/` | LM05 | 8-step affordability engine, do-nothing baseline, human confirmation journal |
-| `life_mentor/health/` | LM06 | USDA subset + importer, nutrition analysis, safety flags |
-| `life_mentor/lifestyle/` | LM07 | exercise plan + WHO check, sleep analysis, habits |
-| `life_mentor/tracking/` | LM07 | metric log + periodic reviews |
-| `life_mentor/career/` | LM08 | career snapshot, job-offer comparison, course evaluation, benchmarks, negotiation checklist |
-| `life_mentor/reports/` | LM09 | Markdown report builders (finance … life plan) |
-| `life_mentor/cli.py` | LM09 | `life-mentor` command line |
-| `life_mentor/integrations/` | LM10 | local-file importers: bank CSV, AMFI NAVAll.txt |
+| `products/life_mentor/security/` | LM02 | private store, hash-chained journal, redaction, report scanner |
+| `products/life_mentor/profile/` | LM01 | facts with provenance, consent ledger, profile store, missing-fact gate |
+| `products/life_mentor/research/` | LM03 | `SourceRecord`, `RulePack` loader, staleness gate |
+| `products/life_mentor/rules/` | LM04–LM07 | dated RulePack JSON files (tax, low-risk rates, nutrition, health interactions, activity, sleep) |
+| `products/life_mentor/finance/` | LM04 | income tax + take-home, cash flow, emergency fund, debt payoff, goal SIP, net worth |
+| `products/life_mentor/decision_engine/` | LM05 | 8-step affordability engine, do-nothing baseline, human confirmation journal |
+| `products/life_mentor/health/` | LM06 | USDA subset + importer, nutrition analysis, safety flags |
+| `products/life_mentor/lifestyle/` | LM07 | exercise plan + WHO check, sleep analysis, habits |
+| `products/life_mentor/tracking/` | LM07 | metric log + periodic reviews |
+| `products/life_mentor/career/` | LM08 | career snapshot, job-offer comparison, course evaluation, benchmarks, negotiation checklist |
+| `products/life_mentor/reports/` | LM09 | Markdown report builders (finance … life plan) |
+| `products/life_mentor/cli.py` | LM09 | `life-mentor` command line |
+| `products/life_mentor/integrations/` | LM10 | local-file importers: bank CSV, AMFI NAVAll.txt |

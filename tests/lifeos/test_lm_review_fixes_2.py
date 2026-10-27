@@ -55,7 +55,7 @@ from life_mentor.reports import (
 )
 from life_mentor.research import load_rule_pack
 from life_mentor.security import ForbiddenFieldLeak, PrivateStore
-from tests.lm_persona import build_persona
+from tests.lifeos.lm_persona import build_persona
 from weekly_tracker.render import render
 from weekly_tracker.sources.git_work import git_section, is_test_path
 from weekly_tracker.sources.life_mentor import life_mentor_section
@@ -464,7 +464,7 @@ def test_nit_amfi_plan_option_redacted(tmp_path: Path) -> None:
 
 
 def test_nit_weekly_render_runs_scanner() -> None:
-    from tests.test_weekly_tracker import fixture_model
+    from tests.lifeos.test_weekly_tracker import fixture_model
 
     model = fixture_model()
     model["planner"]["tasks"][0]["text"] = "returns are guaranteed"

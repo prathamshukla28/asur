@@ -102,7 +102,7 @@ def test_no_float_in_rules(pack) -> None:
 
 
 def test_no_tax_numbers_hard_coded_in_python() -> None:
-    src = (Path(__file__).resolve().parent.parent / "life_mentor" / "finance" / "tax.py").read_text(
+    src = (Path(__file__).resolve().parent.parent.parent / "products" / "life_mentor" / "finance" / "tax.py").read_text(
         encoding="utf-8")
     for literal in ("75000", "75_000", "1200000", "12_00_000", "60000", "0.04", "0.37",
                     "250000", "500000", "5000000", "12500"):

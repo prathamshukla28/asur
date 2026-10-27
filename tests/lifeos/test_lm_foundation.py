@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parent.parent
-LM = REPO / "life_mentor"
+REPO = Path(__file__).resolve().parent.parent.parent
+LM = REPO / "products" / "life_mentor"
 
 PLACEHOLDER_SUBPACKAGES = (
     "health",
@@ -86,7 +86,7 @@ def test_pyproject_includes_life_mentor() -> None:
 def test_ci_import_check_and_mypy_cover_life_mentor() -> None:
     ci = (REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "import life_mentor" in ci
-    assert "mypy asur life_mentor" in ci
+    assert "mypy products/life_mentor" in ci
 
 
 def test_docs_dir_not_duplicated_outside_package() -> None:

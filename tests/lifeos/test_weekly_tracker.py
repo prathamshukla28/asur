@@ -18,7 +18,7 @@ from weekly_tracker.planner import ENV_HOME, Planner, resolve_home
 from weekly_tracker.render import render
 from weekly_tracker.week import DAY_NAMES, IsoWeek, day_index, weeks_in_year
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent.parent.parent
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "wt_golden_2026-W41.md"
 NOW = "2026-10-11T00:00:00Z"
 W41 = IsoWeek(2026, 41)
@@ -300,6 +300,6 @@ def test_packaging_wiring() -> None:
     assert 'weekly-tracker = "weekly_tracker.cli:main"' in py
     assert 'asur = "asur.cli:main"' in py and "dependencies = []" in py
     ci = (REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "import weekly_tracker" in ci and "mypy asur life_mentor weekly_tracker" in ci
+    assert "import weekly_tracker" in ci and "mypy products/life_mentor products/weekly_tracker" in ci
     assert ".weekly_tracker/" in (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
-    assert (REPO / "weekly_tracker" / "README.md").is_file()
+    assert (REPO / "products" / "weekly_tracker" / "README.md").is_file()

@@ -21,7 +21,7 @@ from life_mentor.reports import (
     render_report,
 )
 from life_mentor.security import PrivateStore, find_forbidden, redact
-from tests.lm_persona import AS_OF, NOW, build_persona, course_decision
+from tests.lifeos.lm_persona import AS_OF, NOW, build_persona, course_decision
 
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "lm_golden_life_plan.md"
 GEN = "2026-10-11"

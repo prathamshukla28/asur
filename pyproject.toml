@@ -64,6 +64,10 @@ life-mentor = "life_mentor.cli:main"
 # everywhere (local, CI, contributors), independent of ruff version or any
 # machine-level user config.
 target-version = "py310"
+# Two source roots (same as [tool.setuptools.packages.find].where): the Life OS
+# products live under products/, and ruff must keep treating them as first-party
+# for import sorting.
+src = [".", "products"]
 
 [tool.ruff.lint]
 # ruff's historical default working set (pyflakes + the import/logic pycodestyle
@@ -80,7 +84,7 @@ python_version = "3.10"
 ignore_missing_imports = true
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = [".", "products"]
 include = ["asur*", "life_mentor*", "weekly_tracker*"]
 
 # Ship Life Mentor's charter and dated RulePack JSON files with the package.

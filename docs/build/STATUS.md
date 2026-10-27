@@ -24,7 +24,7 @@ _Live build dashboard. Update at every phase gate._
   SPEC-GAP G2). All stdlib-only and none write an artifact.
 - Local `.ics` calendar export (stdlib RFC 5545, no network): `weekly-tracker
   plan ics` (planner) and `life-mentor habits ics` (active habits), built on the
-  shared `life_mentor/ics.py` writer.
+  shared `products/life_mentor/ics.py` writer.
 - **P00 done:** 8 ADRs (`docs/adr/0001–0008`, all Accepted); `asur[generation]`
   optional extra declared in `pyproject.toml`; `tests/test_boundary.py` import-linter
   enforces stdlib-only core/script (closes SPEC-GAP G7 for those layers).

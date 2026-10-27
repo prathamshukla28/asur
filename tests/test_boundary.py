@@ -70,8 +70,8 @@ MEDIA_FORBIDDEN = frozenset(
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "asur"
 # Life Mentor (top-level sibling package) is stdlib-only end to end: every
 # module is linted, and it may import only the stdlib, `asur`, or itself.
-LIFE_MENTOR_ROOT = Path(__file__).resolve().parent.parent / "life_mentor"
-WEEKLY_TRACKER_ROOT = Path(__file__).resolve().parent.parent / "weekly_tracker"
+LIFE_MENTOR_ROOT = Path(__file__).resolve().parent.parent / "products" / "life_mentor"
+WEEKLY_TRACKER_ROOT = Path(__file__).resolve().parent.parent / "products" / "weekly_tracker"
 ALLOWED_FIRST_PARTY = frozenset({"asur", "life_mentor", "weekly_tracker"})
 
 

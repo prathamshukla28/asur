@@ -103,9 +103,16 @@ jobs:
         run: ruff check .
 
       - name: Mypy
-        run: mypy asur life_mentor weekly_tracker   # blocking type gate across all shipped packages
+        run: mypy asur   # blocking type gate for the ASUR core package
 
-      # Default addopts already excludes the `integration` marker, so this runs
-      # the stdlib unit suite only (no ffmpeg, no GPU, no network).
-      - name: Pytest (unit suite)
-        run: pytest -q
+      - name: Mypy (Life OS)
+        run: mypy products/life_mentor products/weekly_tracker   # blocking type gate for the Life OS products
+
+      # Default addopts already excludes the `integration` marker, so both lanes
+      # run the stdlib unit suite only (no ffmpeg, no GPU, no network). Two lanes
+      # so a Life OS failure is visibly not an ASUR failure (and vice versa).
+      - name: Pytest (ASUR unit suite)
+        run: pytest -q --ignore=tests/lifeos
+
+      - name: Pytest (Life OS unit suite)
+        run: pytest -q tests/lifeos

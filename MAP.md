@@ -29,7 +29,10 @@ Nothing is published automatically. ASUR stops at gate 2 and a human decides.
 | `asur/orchestrator/` | 18-state machine, control tokens, run log | yes |
 | `asur/platforms/` | Instagram Reels, YouTube Shorts, YouTube Long format packs | yes |
 | `asur/tools/` | Firewall projection, hash-chained queue, status, daily driver | yes |
-| `tests/` | Test suite (`python3 -m pytest -q`) | yes |
+| `products/life_mentor/` | Separate product: local-first personal finance/health/career mentor (`life-mentor` CLI) | yes |
+| `products/weekly_tracker/` | Separate product: ISO-week planner + weekly review (`weekly-tracker` CLI) | yes |
+| `tests/` | ASUR test suite (`python3 -m pytest -q --ignore=tests/lifeos`) | yes |
+| `tests/lifeos/` | Life Mentor + Weekly Tracker test suite (`python3 -m pytest -q tests/lifeos`) | yes |
 | `docs/` | Spec, architecture, ADRs, build plans, progress | yes |
 | `guides/` | PDF guides and the scripts that generate them | yes |
 | `studio/` | Hands-on tools: render demo, edit video, lyric video, demo seeder | yes (media ignored) |
@@ -60,8 +63,10 @@ python3 guides/make_guide.py                          # -> guides/ASUR-Lyric-Vid
 python3 guides/make_engineering_handbook.py           # -> guides/ASUR-Engineering-Handbook.pdf
 
 # Health
-python3 -m pytest -q
-ruff check asur studio guides
+python3 -m pytest -q                      # everything
+python3 -m pytest -q --ignore=tests/lifeos  # ASUR only
+python3 -m pytest -q tests/lifeos           # Life OS products only
+ruff check .
 ```
 
 ## Status in one line

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from life_mentor.cli import main
-from tests.lm_persona import build_persona
+from tests.lifeos.lm_persona import build_persona
 
 FIX = Path(__file__).resolve().parent / "fixtures"
 
