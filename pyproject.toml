@@ -46,7 +46,7 @@ generation = [
 # stays stdlib-only (ASUR-LOCAL-01); these are test/CI-time only, never imported
 # by the core.
 dev = [
-    "ruff==0.16.10",
+    "ruff==0.17.2",
     "mypy==2.4.0",
     "pytest==9.1.1",
 ]
