@@ -103,7 +103,15 @@ def _install_fake_ffmpeg(monkeypatch):
     captured: list[list[str]] = []
 
     def fake_run(cmd, *args, **kwargs):
-        captured.append(list(cmd))
+        argv = list(cmd)
+        # Captions are passed via drawtext textfile=; inline the file's text
+        # into the recorded argv so assertions can see what would be burned.
+        for i, token in enumerate(argv):
+            if "drawtext=textfile=" in token:
+                raw = token.split("drawtext=textfile=", 1)[1].split(":expansion", 1)[0]
+                path = raw.replace("\\\\", "\x00").replace("\\", "").replace("\x00", "\\")
+                argv[i] = token + " #text=" + Path(path).read_text(encoding="utf-8")
+        captured.append(argv)
         out = Path(cmd[-1])
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(b"\x00")

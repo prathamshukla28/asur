@@ -141,11 +141,18 @@ def build_idea(
     *,
     platform: str = DEFAULT_PLATFORM,
     language: str = "en",
+    takeaway: str | None = None,
     identity: Identity | None = None,
 ) -> Artifact:
-    """Build the ``idea`` artifact from a single human-supplied line."""
+    """Build the ``idea`` artifact from a single human-supplied line.
+
+    ``takeaway`` is the creator's own concrete point (the thing the viewer
+    should learn). A template cannot know it; without it (and without an LLM
+    draft) the script's value section is generic and the quality gate HOLDs.
+    """
     if not one_line or not one_line.strip():
         raise ValueError("idea line is empty")
+    creator_takeaway = " ".join((takeaway or "").split()) or None
 
     subject = _derive_subject(one_line)
     emotion = _first_cue(one_line, _EMOTION_CUES) or "curiosity"
@@ -155,6 +162,8 @@ def build_idea(
         "one_line": one_line.strip(),
         "language": language,
         "platform": platform,
+        "creator_takeaway": creator_takeaway,
+        "generator": "template",
         "understanding": {
             "what": {
                 "value": subject,

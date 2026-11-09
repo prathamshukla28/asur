@@ -82,6 +82,7 @@ def _rebuild(
             project_id,
             platform=body.get("platform", "instagram_reels"),
             language=body.get("language", "en"),
+            takeaway=body.get("creator_takeaway"),
         )
     if kind == "research" and idea is not None:
         return build_research(idea, project_id)
@@ -205,6 +206,19 @@ def verify_reproducible(workspace: Workspace) -> dict[str, Any]:
                     "rebuilt_checksum": None,
                     "match": None,
                     "note": "skipped: not a deterministic stdlib rebuild target",
+                }
+            )
+            continue
+        generator = str((stored[kind].body or {}).get("generator", "template"))
+        if "llm:" in generator:
+            # An LLM draft cannot be rebuilt byte-for-byte offline; say so.
+            stages.append(
+                {
+                    "kind": kind,
+                    "stored_checksum": stored[kind].checksum,
+                    "rebuilt_checksum": None,
+                    "match": None,
+                    "note": f"skipped: drafted by {generator} (not deterministically rebuildable)",
                 }
             )
             continue

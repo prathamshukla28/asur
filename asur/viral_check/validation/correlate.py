@@ -114,17 +114,22 @@ def correlate(study_dir: str | Path) -> dict:
 
     # Align clips present in BOTH views and scores, deterministic order.
     clip_ids = sorted(set(views) & set(scores))
-    views_series = [float(views[c]) for c in clip_ids]
 
     dimension_rows: list[dict] = []
     for dim in DIMENSIONS:
-        dim_scores = [float(_dim_score(scores[c], dim)) for c in clip_ids]
-        rho = spearman(dim_scores, views_series)
+        # Only clips where this dimension was actually scored; an 'unknown'
+        # dimension is excluded, never imputed as 0.
+        pairs = [
+            (score, float(views[c]))
+            for c in clip_ids
+            if (score := _dim_score(scores[c], dim)) is not None
+        ]
+        rho = spearman([p[0] for p in pairs], [p[1] for p in pairs]) if len(pairs) >= 2 else None
         dimension_rows.append(
             {
                 "dimension": dim,
-                "spearman": round(rho, 6),
-                "sample_size": len(clip_ids),
+                "spearman": round(rho, 6) if rho is not None else None,
+                "sample_size": len(pairs),
             }
         )
 
@@ -162,11 +167,12 @@ def _load_scores(root: Path) -> dict:
     return scores
 
 
-def _dim_score(body: dict, dimension: str) -> int:
+def _dim_score(body: dict, dimension: str) -> float | None:
     for row in body.get("dimensions") or []:
         if row.get("dimension") == dimension:
-            return int(row.get("score", 0))
-    return 0
+            score = row.get("score")
+            return float(score) if isinstance(score, (int, float)) else None
+    return None
 
 
 def _verdict_buckets(scores: dict, views: dict, clip_ids: list[str]) -> dict:
@@ -234,9 +240,8 @@ def _render_markdown(report: dict) -> str:
         "| --- | --- | --- |",
     ]
     for row in report["dimensions"]:
-        lines.append(
-            f"| {row['dimension']} | {row['spearman']:+.3f} | {row['sample_size']} |"
-        )
+        rho = "unknown (not measured)" if row["spearman"] is None else f"{row['spearman']:+.3f}"
+        lines.append(f"| {row['dimension']} | {rho} | {row['sample_size']} |")
     lines += ["", "## Verdict buckets (median views)", ""]
     for verdict, info in sorted(report["verdict_buckets"].items()):
         lines.append(

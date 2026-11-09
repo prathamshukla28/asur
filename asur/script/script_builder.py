@@ -21,7 +21,9 @@ from typing import Any
 
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
+from ..llm import LLMProvider, draft_or_fallback
 from . import source_ref
+from .llm_schema import clean_text
 
 # The nine fields every section must carry (DATA_MODELS.md script schema).
 SECTION_FIELDS = (
@@ -95,14 +97,102 @@ def _section(
     }
 
 
+# Narration pace used to turn spoken words into section timings. ~150 words per
+# minute is a common conversational narration rate; the render's system voice
+# speaks slightly faster, so every line fits inside its scene.
+WORDS_PER_SECOND = 2.5
+_MIN_SECTION_S = 2.0
+
+_LLM_SYSTEM = (
+    "You write tight scripts for short vertical videos. Reply with ONE JSON object "
+    "only. Do not invent statistics, studies, quotes, or personal anecdotes; speak "
+    "in second person to the viewer. Each spoken line is at most 2 sentences."
+)
+
+
+def _speech_seconds(text: str) -> float:
+    """Estimated narration time for *text* at WORDS_PER_SECOND (min 2.0s)."""
+    words = len([w for w in text.split() if w.strip("-")])
+    return round(max(_MIN_SECTION_S, words / WORDS_PER_SECOND), 1)
+
+
+def _template_lines(
+    subject: str, hook_text: str, value_line: str, core_promise: str, has_takeaway: bool
+) -> dict[str, tuple[str, str]]:
+    """Deterministic offline (spoken_words, onscreen_text) per section.
+
+    The subject is named in the hook, problem, and payoff only - not mechanically
+    in every line - and the story beat describes a common pattern instead of
+    claiming a first-person experience the template cannot have had.
+    """
+    return {
+        "hook": (hook_text, hook_text),
+        "opening": (
+            "If this sounds familiar, the next thirty seconds are for you.",
+            subject.capitalize(),
+        ),
+        "problem": (
+            f"Most people struggle with {subject} because they fix the wrong thing first.",
+            "Here's the real problem",
+        ),
+        "context": (
+            "The usual advice skips the part that actually matters.",
+            "The part everyone skips",
+        ),
+        "story": (
+            "Here's how it usually goes: you follow the popular tips, see little "
+            "change, and assume the problem is you.",
+            "Sound familiar?",
+        ),
+        "value": (value_line, "The one thing that works"),
+        "proof": (
+            (
+                "Don't take my word for it - try it this week and check the result yourself."
+                if has_takeaway
+                else "Test it on your own situation before you trust it."
+            ),
+            "Test it yourself",
+        ),
+        "payoff": (
+            f"Do that, and {subject} stops being the thing that holds you back.",
+            core_promise,
+        ),
+        "cta": ("Save this so you have it the next time it comes up.", "Save this for later"),
+    }
+
+
+def _validate_llm_script(data: Any, hook_text: str) -> dict[str, tuple[str, str]]:
+    sections = data.get("sections") if isinstance(data, dict) else None
+    if not isinstance(sections, dict):
+        raise ValueError("expected a 'sections' object")
+    out: dict[str, tuple[str, str]] = {"hook": (hook_text, hook_text)}
+    for name in SECTION_ORDER[1:]:
+        sec = sections.get(name)
+        if not isinstance(sec, dict):
+            raise ValueError(f"missing section {name!r}")
+        spoken = clean_text(sec.get("spoken_words"), max_chars=300)
+        onscreen = clean_text(sec.get("onscreen_text") or spoken.split(".")[0], max_chars=80)
+        out[name] = (spoken, onscreen)
+    return out
+
+
 def build_script(
     strategy_artifact: Artifact,
     hooks_artifact: Artifact,
     project_id: str,
     *,
     identity: Identity | None = None,
+    generator: LLMProvider | None = None,
 ) -> Artifact:
-    """Produce a ``script`` artifact from ``strategy`` + ``hooks``."""
+    """Produce a ``script`` artifact from ``strategy`` + ``hooks``.
+
+    The selected hook is always the opening line. Spoken words come from the
+    deterministic template or, when ``generator`` is supplied and its output
+    validates, from the LLM; production fields (visual/audio/transition
+    direction) are template-authored either way. Section timings are derived
+    from the spoken word counts at WORDS_PER_SECOND, so the estimated duration
+    reflects the actual script length.
+    """
     hook = _selected_hook(hooks_artifact)
     hook_meta = hook.get("metadata", {})
     hook_text = hook_meta.get("hook", "")
@@ -114,100 +204,91 @@ def build_script(
     core_promise = _strategy_val(
         strategy_artifact, "core_promise", f"the one thing about {subject} that matters"
     )
+    value_field = (strategy_artifact.body or {}).get("value_prop") or {}
     value_prop = _strategy_val(
         strategy_artifact, "value_prop", f"a clear, honest take on {subject}"
     )
+    has_takeaway = isinstance(value_field, dict) and value_field.get("source") == "creator"
+    value_line = (
+        f"Here's the one thing that actually works: {value_prop.rstrip('.')}."
+        if has_takeaway
+        else f"Here's the one thing that actually fixes it: {value_prop.rstrip('.')}."
+    )
 
+    lines, provenance = draft_or_fallback(
+        generator,
+        prompt=(
+            f"Topic: {subject!r}. Opening hook (keep verbatim): {hook_text!r}.\n"
+            f"Core promise: {core_promise!r}. "
+            + (f"The creator's key takeaway (must be the value section): {value_prop!r}.\n"
+               if has_takeaway else "Propose one concrete, checkable takeaway.\n")
+            + 'Return JSON {"sections": {NAME: {"spoken_words": str, "onscreen_text": '
+            "str (max 6 words)}}} for NAME in: "
+            + ", ".join(SECTION_ORDER[1:])
+            + "."
+        ),
+        system=_LLM_SYSTEM,
+        validate=lambda data: _validate_llm_script(data, hook_text),
+        fallback=lambda: _template_lines(subject, hook_text, value_line, core_promise, has_takeaway),
+    )
+    if provenance["generator"] == "template":
+        value_source = "creator" if has_takeaway else "template-generic"
+    else:
+        value_source = provenance["generator"]
+
+    # Cumulative timings from spoken length.
+    timings: dict[str, str] = {}
+    cursor = 0.0
+    for name in SECTION_ORDER:
+        dur = _speech_seconds(lines[name][0])
+        timings[name] = f"{cursor:.1f}-{cursor + dur:.1f}s"
+        cursor = round(cursor + dur, 1)
+    total_s = cursor
+
+    production = {
+        "hook": (hook_emotion, "stop scrolling; feel the open loop",
+                 "pattern-interrupt first frame; tight on speaker or bold text",
+                 "none - keep attention on the hook", "hard cut into opening",
+                 "punchy, no intro music delay"),
+        "opening": (emotion, "recognize themselves; commit to watch",
+                    "speaker direct to camera; confident framing",
+                    "light b-roll establishing the subject", "smooth cut",
+                    "subtle bed music enters low"),
+        "problem": ("concern", "feel the stakes", "visual metaphor for the problem",
+                    "footage illustrating the pain point", "quick cut on emphasis",
+                    "music tension rises slightly"),
+        "context": ("curiosity", "lean in for the missing piece",
+                    "contrast old-way vs better-way", "split-screen or comparison b-roll",
+                    "wipe or slide", "steady bed"),
+        "story": ("empathy", "recognize the pattern; relate",
+                  "authentic recreation of the common mistake",
+                  "authentic, not stock-feeling footage", "soft cut",
+                  "music softens under the story"),
+        "value": ("aspiration", "feel they're getting real usefulness",
+                  "clear on-screen steps or key point", "diagram or demonstration",
+                  "cut on each point", "music lifts on the payoff build"),
+        "proof": ("credibility", "believe it is worth testing",
+                  "evidence, example, or before/after", "proof footage or result shot",
+                  "clean cut", "steady, confident bed"),
+        "payoff": (emotion, "feel the loop close; satisfied", "confident resolution shot",
+                   "summary visual", "settle", "music resolves"),
+        "cta": ("warm", "take the action (save / send / follow)",
+                "speaker direct to camera; clear ask", "none", "end card", "music outro"),
+    }
     sections: dict[str, Any] = {}
-
-    sections["hook"] = _section(
-        spoken=hook_text,
-        timing="0.0-3.0s",
-        emotion=hook_emotion,
-        reaction="stop scrolling; feel the open loop",
-        visual="pattern-interrupt first frame; tight on speaker or bold text",
-        onscreen=hook_text,
-        broll="none - keep attention on the hook",
-        transition="hard cut into opening",
-        audio="punchy, no intro music delay",
-    )
-
-    sections["opening"] = _section(
-        spoken=f"If you care about {subject}, the next 30 seconds are for you.",
-        timing="3.0-7.0s",
-        emotion=emotion,
-        reaction="recognize themselves; commit to watch",
-        visual="speaker direct to camera; confident framing",
-        onscreen=f"{subject}".capitalize(),
-        broll="light b-roll establishing the subject",
-        transition="smooth cut",
-        audio="subtle bed music enters low",
-    )
-
-    sections["problem"] = _section(
-        spoken=f"Most people struggle with {subject} because they fix the wrong thing first.",
-        timing="7.0-13.0s",
-        emotion="concern",
-        reaction="feel the stakes",
-        visual="visual metaphor for the problem",
-        onscreen="Here's the real problem",
-        broll="footage illustrating the pain point",
-        transition="quick cut on emphasis",
-        audio="music tension rises slightly",
-    )
-
-    sections["context"] = _section(
-        spoken=f"The usual advice on {subject} skips the part that actually matters.",
-        timing="13.0-20.0s",
-        emotion="curiosity",
-        reaction="lean in for the missing piece",
-        visual="contrast old-way vs better-way",
-        onscreen="The part everyone skips",
-        broll="split-screen or comparison b-roll",
-        transition="wipe or slide",
-        audio="steady bed",
-    )
-
-    sections["story"] = _section(
-        spoken=f"I learned this the hard way with {subject} - so you don't have to.",
-        timing="20.0-30.0s",
-        emotion="empathy",
-        reaction="trust the speaker; relate",
-        visual="personal footage or authentic recreation",
-        onscreen="I learned this the hard way",
-        broll="authentic, not stock-feeling footage",
-        transition="soft cut",
-        audio="music softens under the story",
-    )
-
-    sections["value"] = _section(
-        spoken=f"Here's the one thing that actually fixes it: {value_prop}.",
-        timing="30.0-40.0s",
-        emotion="aspiration",
-        reaction="feel they're getting real usefulness",
-        visual="clear on-screen steps or key point",
-        onscreen="The one thing that works",
-        broll="diagram or demonstration",
-        transition="cut on each point",
-        audio="music lifts on the payoff build",
-    )
-
-    sections["proof"] = _section(
-        spoken=f"This isn't just talk - it's exactly why it works for {subject}.",
-        timing="40.0-47.0s",
-        emotion="credibility",
-        reaction="believe the claim",
-        visual="evidence, example, or before/after",
-        onscreen="Why it actually works",
-        broll="proof footage or result shot",
-        transition="clean cut",
-        audio="steady, confident bed",
-    )
+    for name in SECTION_ORDER:
+        spoken, onscreen = lines[name]
+        emo, reaction, visual, broll, transition, audio = production[name]
+        sections[name] = _section(
+            spoken=spoken, timing=timings[name], emotion=emo, reaction=reaction,
+            visual=visual, onscreen=onscreen, broll=broll, transition=transition,
+            audio=audio,
+        )
 
     pattern_interrupts = [
         _section(
             spoken="(none - visual beat)",
-            timing="~17.0s",
+            timing=f"~{total_s / 3:.1f}s",
             emotion="surprise",
             reaction="reset attention mid-video",
             visual="sudden zoom or angle change",
@@ -218,7 +299,7 @@ def build_script(
         ),
         _section(
             spoken="(none - visual beat)",
-            timing="~33.0s",
+            timing=f"~{2 * total_s / 3:.1f}s",
             emotion="surprise",
             reaction="re-hook before the payoff",
             visual="text punch-in on the key word",
@@ -229,30 +310,6 @@ def build_script(
         ),
     ]
 
-    sections["payoff"] = _section(
-        spoken=f"Do that, and {subject} stops being the thing that holds you back.",
-        timing="47.0-54.0s",
-        emotion=emotion,
-        reaction="feel the loop close; satisfied",
-        visual="confident resolution shot",
-        onscreen=core_promise,
-        broll="summary visual",
-        transition="settle",
-        audio="music resolves",
-    )
-
-    sections["cta"] = _section(
-        spoken=f"Save this so you remember it next time {subject} comes up.",
-        timing="54.0-60.0s",
-        emotion="warm",
-        reaction="take the action (save / send / follow)",
-        visual="speaker direct to camera; clear ask",
-        onscreen="Save this for later",
-        broll="none",
-        transition="end card",
-        audio="music outro",
-    )
-
     body = {
         "language": language,
         "subject": subject,
@@ -261,10 +318,17 @@ def build_script(
         + ["pattern_interrupts"]
         + list(SECTION_ORDER[7:]),
         "section_fields": list(SECTION_FIELDS),
-        "sections": {name: sections[name] for name in SECTION_ORDER},
+        "sections": sections,
         "pattern_interrupts": pattern_interrupts,
-        "estimated_duration_s": 60,
-        "method": "local structured script builder; anchored to selected hook; no network",
+        "estimated_duration_s": total_s,
+        "words_per_second": WORDS_PER_SECOND,
+        "value_source": value_source,
+        **provenance,
+        "method": (
+            "local structured script builder; anchored to selected hook; no network"
+            if provenance["generator"] == "template"
+            else f"spoken lines drafted by {provenance['generator']}; anchored to selected hook"
+        ),
     }
 
     return make_artifact(

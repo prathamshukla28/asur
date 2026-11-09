@@ -5,12 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "asur"
 version = "0.1.0"
-description = "ASUR - a local-first, key-free AI Content Creation OS. Phase 1: SCRIPT intelligence."
+description = "ASUR - a local-first content pipeline: idea -> script -> FFmpeg render -> measured viral check -> publish gate."
 readme = "README.md"
 requires-python = ">=3.10"
-# ASUR-LOCAL-01: zero runtime dependencies. Stdlib only. No network, no keys.
-# The core, SCRIPT, VIRAL CHECK, ORCHESTRATOR, and FIREWALL layers import ONLY
-# the standard library. This list MUST stay empty (see ADR-0002, SPEC-GAP G7).
+# Zero runtime dependencies: the core, SCRIPT, VIRAL CHECK, ORCHESTRATOR, and
+# FIREWALL layers import ONLY the standard library (see ADR-0002). The optional
+# LLM step talks to a local Ollama server over stdlib urllib (asur/llm/adapters),
+# and the optional Anthropic provider lazy-imports the `anthropic` package from
+# the `llm` extra below. This list MUST stay empty.
 dependencies = []
 
 # Media/generation path only. Declared here so `pip install -e .[generation]`
@@ -40,6 +42,12 @@ generation = [
     "torchaudio==2.11.0",        # BSD-2 - Stable Audio 44.1kHz WAV writing
 ]
 
+# Optional hosted-LLM provider for the SCRIPT stages (ASUR_LLM=anthropic). The
+# local Ollama provider needs no package at all. Never imported by the core.
+llm = [
+    "anthropic>=0.40",
+]
+
 # Developer / CI tooling. Pinned so lint, type-check, and test runs are
 # reproducible: a fresh `pip install ruff` in CI pulls whatever released last and
 # can change the rule set out from under the build (it did). The package itself
@@ -53,21 +61,16 @@ dev = [
 
 [project.scripts]
 asur = "asur.cli:main"
-weekly-tracker = "weekly_tracker.cli:main"
-life-mentor = "life_mentor.cli:main"
 
 [tool.ruff]
 # Explicit, version-independent lint config. Without this, ruff's built-in
 # default rule set changes between releases, so a `pip install ruff` in CI could
-# pass one week and fail the next (it did — unused-noqa in life_mentor). Pinning
+# pass one week and fail the next (it did). Pinning
 # the rule set here plus a pinned ruff in the `dev` extra makes lint deterministic
 # everywhere (local, CI, contributors), independent of ruff version or any
 # machine-level user config.
 target-version = "py310"
-# Two source roots (same as [tool.setuptools.packages.find].where): the Life OS
-# products live under products/, and ruff must keep treating them as first-party
-# for import sorting.
-src = [".", "products"]
+src = ["."]
 
 [tool.ruff.lint]
 # ruff's historical default working set (pyflakes + the import/logic pycodestyle
@@ -84,13 +87,8 @@ python_version = "3.10"
 ignore_missing_imports = true
 
 [tool.setuptools.packages.find]
-where = [".", "products"]
-include = ["asur*", "life_mentor*", "weekly_tracker*"]
-
-# Ship Life Mentor's charter and dated RulePack JSON files with the package.
-[tool.setuptools.package-data]
-life_mentor = ["README.md", "docs/*.md", "rules/*.json", "rules/*.md", "health/data/*.json"]
-weekly_tracker = ["README.md"]
+where = ["."]
+include = ["asur*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

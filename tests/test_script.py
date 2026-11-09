@@ -26,12 +26,15 @@ from asur.script.script_builder import SECTION_FIELDS, SECTION_ORDER, build_scri
 from asur.script.strategy import build_strategy
 
 SAMPLE_IDEA = "why most people waste money on AI tools"
+SAMPLE_TAKEAWAY = (
+    "list every AI subscription you pay for and cancel the ones that use the same model"
+)
 PROJECT_ID = "test-project"
 
 
-def _build_chain(project_id=PROJECT_ID):
+def _build_chain(project_id=PROJECT_ID, takeaway=SAMPLE_TAKEAWAY):
     """Build the full Phase 1 artifact chain and return it as a dict."""
-    idea = build_idea(SAMPLE_IDEA, project_id)
+    idea = build_idea(SAMPLE_IDEA, project_id, takeaway=takeaway)
     research = build_research(idea, project_id)
     audience = build_audience(idea, research, project_id)
     strategy = build_strategy(idea, audience, project_id)
@@ -162,6 +165,68 @@ def test_gate_ships_on_good_script():
     assert result.disposition == SHIP, f"expected SHIP, got {result.disposition}"
     assert result.passed is True
     assert chain["qa_report"].body["checks_total"] == 13
+
+
+def test_gate_holds_template_script_without_a_concrete_takeaway():
+    """A pure-template script has a generic value line; the gate must not SHIP it."""
+    chain = _build_chain(takeaway=None)
+    assert chain["script"].body["value_source"] == "template-generic"
+    result = chain["result"]
+    assert result.disposition != SHIP
+    failed = {r["check"] for r in result.reasons if r["disposition"] != SHIP}
+    assert failed == {"useful_info"}
+
+
+def _with_spoken(script, **lines):
+    import copy
+
+    broken = copy.deepcopy(script)
+    for name, text in lines.items():
+        broken.body["sections"][name]["spoken_words"] = text
+    broken.checksum = broken.recompute_checksum()
+    return broken
+
+
+def _failed_checks(chain, script):
+    result = run_quality_gate(
+        script, hooks_artifact=chain["hooks"], strategy_artifact=chain["strategy"]
+    )
+    return {r["check"] for r in result.reasons if r["disposition"] != SHIP}
+
+
+def test_gate_holds_on_unsourced_statistic():
+    chain = _build_chain()
+    bad = _with_spoken(chain["script"], proof="Nine out of ten creators already do this.")
+    assert "credible_claims" in _failed_checks(chain, bad)
+
+
+def test_gate_holds_on_invented_first_person_story():
+    chain = _build_chain()
+    bad = _with_spoken(chain["script"], story="I learned this the hard way after years of mistakes.")
+    assert "authenticity" in _failed_checks(chain, bad)
+
+
+def test_gate_holds_on_near_duplicate_lines_and_weak_cta():
+    chain = _build_chain()
+    payoff = chain["script"].body["sections"]["payoff"]["spoken_words"]
+    bad = _with_spoken(chain["script"], problem=payoff, cta="That is all for today.")
+    failed = _failed_checks(chain, bad)
+    assert {"no_unnecessary_repetition", "appropriate_cta"} <= failed
+
+
+def test_gate_holds_on_overlong_hook():
+    chain = _build_chain()
+    long_hook = " ".join(["word"] * 30)
+    bad = _with_spoken(chain["script"], hook=long_hook)
+    assert "strong_opening" in _failed_checks(chain, bad)
+
+
+def test_script_timings_follow_spoken_length():
+    chain = _build_chain()
+    body = chain["script"].body
+    total = sum(max(2.0, len(s["spoken_words"].split()) / body["words_per_second"])
+                for s in body["sections"].values())
+    assert abs(body["estimated_duration_s"] - total) < 1.0
 
 
 def test_gate_fails_closed_on_degenerate_script():

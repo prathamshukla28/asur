@@ -47,15 +47,13 @@ jobs:
           import sys
           before = set(sys.modules)
           import asur, asur.core, asur.script, asur.orchestrator, asur.tools, asur.viral_check, asur.learning  # noqa: F401
-          import life_mentor, life_mentor.profile, life_mentor.security, life_mentor.research  # noqa: F401
-          import life_mentor.cli, life_mentor.reports, life_mentor.integrations  # noqa: F401
-          import weekly_tracker, weekly_tracker.cli  # noqa: F401
+          import asur.llm, asur.cli, asur.viral_check.probe  # noqa: F401
           after = set(sys.modules)
           forbidden = {
               "torch", "diffusers", "transformers", "kokoro", "soundfile",
               "numpy", "PIL", "cv2", "opentimelineio", "moviepy", "librosa",
               "faster_whisper", "stable_audio_tools",
-              "requests", "httpx", "aiohttp", "urllib3",
+              "requests", "httpx", "aiohttp", "urllib3", "anthropic",
           }
           leaked = sorted(forbidden & {m.split(".")[0] for m in after - before})
           if leaked:
@@ -105,14 +103,31 @@ jobs:
       - name: Mypy
         run: mypy asur   # blocking type gate for the ASUR core package
 
-      - name: Mypy (Life OS)
-        run: mypy products/life_mentor products/weekly_tracker   # blocking type gate for the Life OS products
+      # Default addopts excludes the `integration` marker: stdlib unit suite only
+      # (no GPU, no network). Tests that need the ffmpeg binary skip without it.
+      - name: Pytest (unit suite)
+        run: pytest -q
 
-      # Default addopts already excludes the `integration` marker, so both lanes
-      # run the stdlib unit suite only (no ffmpeg, no GPU, no network). Two lanes
-      # so a Life OS failure is visibly not an ASUR failure (and vice versa).
-      - name: Pytest (ASUR unit suite)
-        run: pytest -q --ignore=tests/lifeos
-
-      - name: Pytest (Life OS unit suite)
-        run: pytest -q tests/lifeos
+  ffmpeg-integration:
+    name: real FFmpeg render + measured viral check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install core + pinned dev tools
+        run: pip install ".[dev]"
+      # The SDXL test self-skips without the [generation] extra (no torch here).
+      - name: Pytest (integration tier + ffmpeg-backed unit tests)
+        run: pytest -q -m integration && pytest -q
+      - name: End-to-end demo (script -> render -> viral check -> publish gate)
+        run: |
+          mkdir -p /tmp/asur-demo
+          asur run --project /tmp/asur-demo --idea "why most people waste money on AI tools" \
+            --takeaway "list every AI subscription you pay for and cancel the ones that use the same underlying model" \
+            --self-approve || test $? -eq 1
+          ls -la /tmp/asur-demo/youtube/*/render/

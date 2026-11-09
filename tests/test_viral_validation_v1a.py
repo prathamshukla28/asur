@@ -176,7 +176,7 @@ def test_correlate_produces_report_with_per_dimension_spearman(study_dir: Path) 
     dims = {row["dimension"]: row for row in report["dimensions"]}
     assert set(dims) == set(DIMENSIONS)
     for row in report["dimensions"]:
-        assert -1.0 <= row["spearman"] <= 1.0
+        assert row["spearman"] is None or -1.0 <= row["spearman"] <= 1.0  # unmeasured -> None
     assert report["sample_size"] == 5
     assert report["metric"] == "public_views"
 

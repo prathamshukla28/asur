@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to ASUR. Please read AGENTS.md (the ASUR Constitution)
+Thank you for contributing to ASUR. Please read docs/spec/SPEC.md (the ASUR invariants)
 and CONTRIBUTING.md before opening this PR.
 -->
 
@@ -30,7 +30,7 @@ ruff check .
 pytest -q
 ```
 
-## Invariant checklist (see AGENTS.md)
+## Invariant checklist (see docs/spec/SPEC.md)
 
 - [ ] Core remains local-first and key-free; no network calls or API keys added (ASUR-LOCAL-01).
 - [ ] No third-party runtime dependency added to the stdlib-only core.
@@ -42,6 +42,6 @@ pytest -q
 
 ## Commit hygiene
 
-- [ ] Commits follow `<type>(pNN): <summary>` (CONTRIBUTING.md / AGENTS.md §10).
+- [ ] Commits follow `<type>(pNN): <summary>` (CONTRIBUTING.md).
 - [ ] No co-author trailers, signatures, or "Generated with" footers.
 - [ ] `ruff check .` passes and `pytest -q` is green.

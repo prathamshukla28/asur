@@ -2,9 +2,11 @@
 
 Takes an ``idea`` artifact and produces a ``research`` artifact: the topic
 restated, several angles worth exploring, supporting points, risks, and
-counterarguments. There is NO network here (ASUR-LOCAL-01). This is structured
-local reasoning over the idea text, and every world-claim is tagged with an
-evidence class so a guess is never presented as a fact (ASUR-HONEST-01).
+counterarguments. By default this is a deterministic template over the idea
+text (no network). When an LLM provider is supplied (see ``asur.llm``), the
+model drafts the angles/points instead; its claims are always tagged HYPOTHESIS
+because a model cannot verify facts, and ``body["generator"]`` records which
+generator produced the artifact (ASUR-HONEST-01).
 
 The point of this stage is not to invent facts the system cannot know. It is to
 lay out the shape of the topic - what to say, what to be careful about, what a
@@ -14,10 +16,20 @@ instead of hidden assumptions (ASUR-EXPLAIN-01).
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
+from ..llm import LLMProvider, draft_or_fallback
 from . import source_ref
 from .evidence import HYPOTHESIS, STRONG_EVIDENCE, VERIFIED_FACT, claim
+from .llm_schema import as_object_list, as_str_list
+
+_SYSTEM = (
+    "You are a research assistant for a short-form video creator. Reply with ONE "
+    "JSON object only. Do not invent statistics, studies, or quotes; if a point "
+    "needs a source, say so in the text."
+)
 
 
 def _subject(idea_artifact: Artifact) -> str:
@@ -27,15 +39,80 @@ def _subject(idea_artifact: Artifact) -> str:
     return problem.get("value") or body.get("one_line", "the topic")
 
 
+def _llm_prompt(idea_artifact: Artifact, subject: str) -> str:
+    one_line = (idea_artifact.body or {}).get("one_line", subject)
+    return (
+        f"Video idea: {one_line!r}. Topic: {subject!r}.\n"
+        "Return JSON with keys:\n"
+        '  "angles": 3-5 objects {"angle": short label, "summary": one sentence, '
+        '"why": one sentence},\n'
+        '  "supporting_points": 2-5 short strings,\n'
+        '  "risks": 1-4 short strings,\n'
+        '  "counterarguments": 1-4 objects {"objection": str, "response": str}.'
+    )
+
+
+def _validate_llm(data: Any, label: str) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("expected a JSON object")
+    basis = f"drafted by {label}; not independently verified"
+    return {
+        "angles": as_object_list(data.get("angles"), ("angle", "summary", "why"), 3, 6),
+        "supporting_points": [
+            claim(t, HYPOTHESIS, basis=basis)
+            for t in as_str_list(data.get("supporting_points"), 2, 6)
+        ],
+        "risks": [claim(t, HYPOTHESIS, basis=basis) for t in as_str_list(data.get("risks"), 1, 5)],
+        "counterarguments": as_object_list(
+            data.get("counterarguments"), ("objection", "response"), 1, 5
+        ),
+    }
+
+
 def build_research(
     idea_artifact: Artifact,
     project_id: str,
     *,
     identity: Identity | None = None,
+    generator: LLMProvider | None = None,
 ) -> Artifact:
-    """Produce a ``research`` artifact from an ``idea`` artifact."""
-    subject = _subject(idea_artifact)
+    """Produce a ``research`` artifact from an ``idea`` artifact.
 
+    ``generator`` is an optional LLM provider; without one (or if its output
+    fails validation) the deterministic template below is used.
+    """
+    subject = _subject(idea_artifact)
+    drafted, provenance = draft_or_fallback(
+        generator,
+        prompt=_llm_prompt(idea_artifact, subject),
+        system=_SYSTEM,
+        validate=lambda data: _validate_llm(data, generator.label if generator else ""),
+        fallback=lambda: _template_sections(subject),
+    )
+    body = {
+        "topic": subject,
+        **drafted,
+        **provenance,
+        "method": (
+            "local heuristic reasoning over the idea; no network used"
+            if provenance["generator"] == "template"
+            else f"drafted by {provenance['generator']}; claims tagged HYPOTHESIS"
+        ),
+    }
+
+    return make_artifact(
+        kind="research",
+        project_id=project_id,
+        body=body,
+        status="ready",
+        sources=[source_ref(idea_artifact)],
+        agent="research",
+        identity=identity,
+    )
+
+
+def _template_sections(subject: str) -> dict[str, Any]:
+    """The deterministic offline research template (the default generator)."""
     angles = [
         {
             "angle": "educational",
@@ -101,21 +178,9 @@ def build_research(
         },
     ]
 
-    body = {
-        "topic": subject,
+    return {
         "angles": angles,
         "supporting_points": supporting_points,
         "risks": risks,
         "counterarguments": counterarguments,
-        "method": "local heuristic reasoning over the idea; no network used",
     }
-
-    return make_artifact(
-        kind="research",
-        project_id=project_id,
-        body=body,
-        status="ready",
-        sources=[source_ref(idea_artifact)],
-        agent="research",
-        identity=identity,
-    )

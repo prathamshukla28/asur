@@ -59,16 +59,35 @@ def test_twelve_dimensions_exactly():
     assert len(set(DIMENSIONS)) == 12
 
 
-def test_every_dimension_scored_0_to_100():
-    """ASUR-HONEST-01: each dimension is an int 0-100, reported on its own."""
-    scored = score_all(_view())
+def test_every_dimension_is_scored_or_explicitly_unknown():
+    """ASUR-HONEST-01: a dimension is an int 0-100 with components, or None + reason."""
+    scored = score_all(_view(strong_first_three_seconds=True, aspect_ratio="9:16"))
     assert len(scored) == 12
     for entry in scored:
         assert entry["dimension"] in DIMENSIONS
-        assert isinstance(entry["score"], int)
-        assert 0 <= entry["score"] <= 100
         assert entry["evidence_class"] in EVIDENCE_CLASSES
         assert entry["note"]
+        if entry["status"] == "scored":
+            assert isinstance(entry["score"], int) and 0 <= entry["score"] <= 100
+            assert entry["components"]
+        else:
+            assert entry["status"] == "unknown"
+            assert entry["score"] is None and entry["components"] == []
+
+
+def test_empty_view_fabricates_no_numbers():
+    """With no measured or declared input, every dimension is unknown (no baseline)."""
+    assert all(d["score"] is None for d in score_all(_view()))
+
+
+def test_semantic_dimensions_are_always_unknown():
+    """Value/Shareability/... cannot be measured from bytes, whatever the facts say."""
+    rich = _view(strong_first_three_seconds=True, captions_present=True,
+                 delivers_promise=True, aspect_ratio="9:16")
+    by_name = {d["dimension"]: d for d in score_all(rich)}
+    for name in ("Value", "Shareability", "Saveability", "Replayability",
+                 "Authenticity", "Audience Fit"):
+        assert by_name[name]["status"] == "unknown"
 
 
 def test_scoring_is_deterministic():
@@ -142,8 +161,8 @@ def test_no_single_viral_percentage_anywhere():
     for banned in _FORBIDDEN_AGGREGATE_KEYS:
         assert banned not in keys, f"forbidden aggregate key leaked: {banned}"
     # The only numeric scores allowed are the twelve per-dimension ones.
-    numeric = [d["score"] for d in body["dimensions"]]
-    assert len(numeric) == 12
+    assert len(body["dimensions"]) == 12
+    assert body["coverage"]["scored"] + body["coverage"]["unknown"] == 12
 
 
 def test_reads_viral_view_shape():

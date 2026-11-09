@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for suggesting an improvement. ASUR is governed by the invariants
-        in `AGENTS.md` (local-first, key-free, firewalled, honest). Please frame
+        in `docs/spec/SPEC.md` (local-first, key-free, firewalled, honest). Please frame
         your request so it respects them.
   - type: textarea
     id: problem

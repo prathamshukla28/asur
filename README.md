@@ -4,184 +4,200 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-**A local-first, key-free AI Content Creation OS.**
+**A local-first content pipeline: one-line idea → scored script → rendered MP4 →
+a viral check measured from the rendered file → a fail-closed publish gate.**
 
-You give it an idea. It researches, writes a strong script, generates and edits
-the video (combining AI-generated media with your own footage), honestly checks
-whether the video has a real chance of performing well, you approve it, it
-publishes, it measures the real-world result, and it learns — so the next video
-is better than the last.
-
-ASUR is **not** another AI video generator. It is a content creation, editing,
-evaluation, and **learning** system that behaves like an intelligent creative
-team, not a pile of disconnected AI tools.
+The core is Python standard library only. Rendering uses the `ffmpeg` binary.
+Narration uses your OS speech engine (macOS `say` or `espeak-ng`) when one is
+installed. Drafting with an LLM is optional (a local Ollama server or the
+Anthropic API). Without one, deterministic templates are used, and every
+artifact records which generator produced it.
 
 ---
 
-## The core loop
+## Demo: one command
 
-```
-SCRIPT  ->  GENERATION  ->  EDITING  ->  VIRAL CHECK  ->  PUBLISH  ->  PERFORMANCE
-  ^                                                                        |
-  +------------------------------ LEARNING <-------------------------------+
-```
-
-- **SCRIPT** understands the idea and remembers everything (intelligence + memory + learning).
-- **GENERATION** creates the media (AI video, AI images, voice, music, plus your own footage).
-- **EDITING** is a human-controlled timeline where AI accelerates but never takes ownership.
-- **VIRAL CHECK** honestly evaluates the finished video — it never fakes a score.
-- **PUBLISH / PERFORMANCE / LEARNING** capture the real result and feed it back into SCRIPT.
-
-Each stage produces a versioned artifact with full provenance. Nothing is a black
-box. Nothing is silently overwritten.
-
----
-
-## The 8 founding invariants
-
-| ID | Rule |
-|----|------|
-| **ASUR-LOCAL-01** | Runs 100% locally. No remote login, no GitHub, no keys, no network for identity. Identity = your local OS user + git config only. |
-| **ASUR-HONEST-01** | Never a fake "93% viral" number. Score input quality against documented signals; separate what is known from what is unknown. |
-| **ASUR-FIREWALL-01** | GENERATION and VIRAL CHECK never talk to each other. SCRIPT is the only bridge. The generator cannot tune content to whatever the checker rubber-stamps. |
-| **ASUR-GATE-01** | Fail closed. A missing input, failed check, or leaked target blocks the pipeline — it never passes by default. |
-| **ASUR-HUMAN-01** | Humans own all inputs, all approvals, and all history. The machine never self-approves silently. |
-| **ASUR-PROV-01** | Every asset carries its source, model, prompt, inputs, transforms, editor, version, and license. |
-| **ASUR-EXPLAIN-01** | Every important decision (why this hook, why this cut, why this verdict) is explainable. |
-| **ASUR-VERSION-01** | Nothing is ever silently overwritten. Every artifact is versioned; history is preserved. |
-
----
-
-## What ASUR is NOT
-
-- Not a cloud service — it works offline, on your machine.
-- Not a key-signing / crypto-attestation system — local identity only.
-- Not a fake-confidence "viral score" generator.
-- Not a tool where the thing that makes the video also grades it.
-- Not optimized for feature count — optimized for **better content over time**.
-
----
-
-## Why ASUR (differentiation)
-
-AI generation and editing are now **commodities** — nearly every tool resells the
-same frontier models (Veo, Kling, Runway, etc.). The open space is elsewhere:
-
-- **Idea / script origination** for video — thin.
-- **Honest pre-publish viral evaluation** — nearly empty. The one tool that ships
-  a virality score (OpusClip) is uncalibrated and grades the same vendor's own
-  output — a fox guarding the henhouse.
-- **A creation ↔ performance learning loop for creators** — empty. A generated
-  video today has no memory of how the last one actually performed.
-- **The firewall** (generator structurally independent from evaluator) — nobody has it.
-
-> **Competitors optimize one stage and resell the same frontier models; ASUR's
-> defensibility is the closed loop — an honest, firewalled viral evaluator plus
-> cross-video learning memory that makes each video informed by the measured
-> performance of the last.**
-
----
-
-## Status
-
-- **Design:** complete — 9 documents, see [`docs/INDEX.md`](docs/INDEX.md), frozen
-  into [`docs/spec/SPEC.md`](docs/spec/SPEC.md).
-- **Phase 1 (SCRIPT intelligence):** **built and passing** — one-line idea →
-  research → audience → strategy → 20+ scored hooks → structured script →
-  13-check quality gate, all local, versioned, checksummed, explainable.
-  **222 unit tests** pass (`python3 -m pytest -q`), plus **5 opt-in integration tests** (`pytest -m integration`, needs the `ffmpeg` binary) — 227 collected. Counts are derived, not hand-typed: run `python3 -m asur.tools.status`.
-- **Build kit:** in place — constitution ([`CLAUDE.md`](CLAUDE.md)), subagents
-  (`.claude/agents/`), commands (`.claude/commands/`), phase plan
-  ([`docs/build/PHASES.md`](docs/build/PHASES.md)), and open questions
-  ([`docs/build/OPEN_QUESTIONS.md`](docs/build/OPEN_QUESTIONS.md)).
-- **Next:** answer the open SPEC-GAPs, then run `/architecture` (P00) and proceed
-  phase by phase.
-
-v1 target: a full rendered 9:16 vertical **Instagram Reel**, end-to-end from a
-one-line idea, generated entirely locally.
-
-Default local stack: **Wan 2.2** (video) + **SDXL** (images) + **Kokoro** (voice)
-+ **Stable Audio** (music/SFX) + **FFmpeg / MoviePy** (render) + **faster-whisper**
-(captions).
-
----
-
-## Documentation
-
-Start at [`docs/INDEX.md`](docs/INDEX.md) for the full map. In reading order:
-
-1. [ARCHITECTURE](docs/ARCHITECTURE.md)
-2. [DATA_MODELS](docs/DATA_MODELS.md)
-3. [STATE_MACHINE](docs/STATE_MACHINE.md)
-4. [PIPELINE](docs/PIPELINE.md)
-5. [VIRAL_CHECK](docs/VIRAL_CHECK.md)
-6. [GENERATION_STACK](docs/GENERATION_STACK.md)
-7. [AGENTS](docs/AGENTS.md)
-8. [MVP](docs/MVP.md)
-
-Build/governance docs:
-
-- [`docs/spec/SPEC.md`](docs/spec/SPEC.md) — the frozen product spec (authoritative).
-- [`docs/build/PHASES.md`](docs/build/PHASES.md) — phases P00–P08 with exit gates.
-- [`docs/build/STATUS.md`](docs/build/STATUS.md) — live build status.
-- [`docs/build/OPEN_QUESTIONS.md`](docs/build/OPEN_QUESTIONS.md) — SPEC-GAPs + defaults.
-- [`docs/adr/README.md`](docs/adr/README.md) — architecture decision records.
-- [`docs/design/DESIGN_SPEC.md`](docs/design/DESIGN_SPEC.md) — CLI UX + rendered-video design system.
-
-This repository also hosts two **separate products** that reuse ASUR's stdlib-only
-core primitives but are not part of the content pipeline: **Life Mentor** and
-**Weekly Tracker**, under [`products/`](products/README.md).
-
----
-
-## Setup
-
-ASUR's core is **stdlib-only** — no third-party packages needed to run SCRIPT.
+Needs Python 3.10+ and `ffmpeg`/`ffprobe` on PATH (`brew install ffmpeg` /
+`apt install ffmpeg`).
 
 ```bash
-# from the asur/ directory
-python3 -m venv .venv
-source .venv/bin/activate
-
-# install the stdlib-only core (editable)
 pip install -e .
-
-# optional: media stack for GENERATION/EDITING (FFmpeg/MoviePy, etc.) — later phases
-pip install -e ".[generation]"
+mkdir -p /tmp/asur-demo
+asur run --project /tmp/asur-demo \
+  --idea "why most people waste money on AI tools" \
+  --takeaway "list every AI subscription you pay for and cancel the ones that run the same underlying model" \
+  --self-approve
 ```
 
-Run the tests (no network, no GPU required):
+What you get in `/tmp/asur-demo`:
 
-```bash
-python3 -m pytest -q        # from the asur/ directory
+| Path | What it is |
+|---|---|
+| `youtube/asur-demo/render/final-video.mp4` | The rendered 1080x1920 video (FFmpeg colour cards + system-voice narration) |
+| `youtube/asur-demo/render/hero-proof.mp4` | The hook scene, rendered and ffprobe-verified before the full render |
+| `youtube/asur-demo/package/` | Ready-to-upload set: video, thumbnail, title, description, tags, metadata, content report |
+| `.script/artifacts/<kind>/` | The artifact trail (15 kinds): idea → research → audience → strategy → hooks → script → qa_report → plans → edit_plan → render → viral_check → publish_package. Every artifact is versioned and checksummed, with lineage. |
+| `.asur/runs/run-1.jsonl` | The state-machine log (every gate, disposition and approval) |
+
+Real result on the author's machine (macOS, Homebrew ffmpeg 9.0.2 built without
+libfreetype, template generator, about 2.5 minutes, exit code 1 = held):
+
+```
+[->] SCRIPT_APPROVED              13-check script quality gate
+[->] HERO_PROOF_READY             hero proof (hook scene rendered + ffprobe-verified)
+[->] FULL_GENERATION              full render 1080x1920 53.6s audio=True
+      note: ffmpeg build lacks the drawtext filter (libfreetype); 9 caption card(s) rendered clean
+[->] QA                           QA on the rendered file
+  verdict  : PASS-WITH-CHANGES  (verdict covers the 4 measured dimension(s) and risk flags only)
+    Attention            27   Retention             7   Visual Quality       97   Platform Fit   93
+    Satisfaction, Value, Shareability, Saveability, Replayability, Originality,
+    Authenticity, Audience Fit: unknown (not measurable from a file)
+    soft  RISK: 2.7s silent gap -> dead air invites a swipe
+    soft  RISK: no cut or motion in the first 3s -> weak scroll-stop
+    soft  RISK: 1.00 of the runtime is frozen frames (static cards)
+    soft  RISK: captions were authored but are not on screen (ffmpeg build lacks drawtext)
+[->] VIRAL_CHECK_APPROVED         viral check over the rendered bytes
+[HOLD] PUBLISH_READY              HUMAN gate #2: publish checks
+        [HOLD] viral_check_completed: viral check PASS-WITH-CHANGES: fix [...] before publishing
 ```
 
-Try Phase 1 end-to-end:
+So the run **holds at the publish gate**, which is the correct outcome. The
+default renderer makes static colour cards, so the measured Attention and
+Retention scores are low. On this machine's ffmpeg build the captions could not
+be burned in. The checker says so, using numbers taken from the file. With an
+ffmpeg build that includes `drawtext`, the captions render. Real motion
+(SDXL/Wan backgrounds via `asur[generation]`) moves those scores.
 
-```bash
-asur script --idea "why most people waste money on AI tools" --project ./demo
-# or: python3 -m asur.cli script --idea "..." --project ./demo
-```
+Without `--self-approve`, the run stops at the first human gate
+(`HERO_PROOF_APPROVED`). You watch `hero-proof.mp4` first, then approve.
 
 ---
 
-## Build order (for Claude Code)
+## What is real, what is template, what is LLM
 
-The build is driven by slash commands defined in `.claude/commands/`, governed by
-[`CLAUDE.md`](CLAUDE.md):
+| Stage | Default (offline) | With `--llm` / `ASUR_LLM` | Recorded as |
+|---|---|---|---|
+| idea parsing, strategy | deterministic rules | same | `generator: template` |
+| research, audience | f-string templates | LLM-drafted JSON, schema-validated; every claim tagged `HYPOTHESIS` | `template` or `llm:<provider>/<model>` |
+| hooks | 21 template hooks | template hooks plus up to 8 LLM hooks, all scored by the same model | per-hook `metadata.generator` |
+| script spoken lines | templates + your `--takeaway` | LLM-drafted lines, anchored to the selected hook | `generator`, `value_source` |
+| hook scoring | 14 measured text features × documented weights (`asur/script/hooks.py`) | same | `features`, `scoring_model` |
+| render | FFmpeg colour cards + system-TTS narration | same | render `provenance` + `license` |
+| viral check | ffprobe/ffmpeg measurements of the MP4 | same | per-dimension `components` |
 
+Invalid LLM output, or an unreachable server, falls back to the template. The
+artifact records the failure (`llm_fallback`). `asur verify-repro` rebuilds
+template stages byte-for-byte. LLM-drafted stages are reported as skipped,
+because they cannot be rebuilt deterministically.
+
+LLM setup:
+
+```bash
+ollama pull llama3.1 && ASUR_LLM=ollama:llama3.1 asur script --idea "..."   # local, no key
+pip install -e ".[llm]" && export ANTHROPIC_API_KEY=... && asur script --idea "..." --llm anthropic
 ```
-/architecture          # P00 — ADRs + scaffolding (no feature code)
-/build-phase 1         # then verify
-/verify-phase 1
-/build-phase 2
-/verify-phase 2
-...
-/build-phase 8
-/verify-phase 8
+
+`anthropic` defaults to the model `claude-sonnet-5-5`. You can choose another
+with `--llm anthropic:<model>`.
+
+---
+
+## The viral check: measured, not asserted
+
+`asur viral-check <video.mp4> --platform instagram_reels|youtube_shorts|youtube_long`
+runs three local passes over the file: `ffprobe` (duration, resolution, fps,
+streams); `ebur128` + `volumedetect` + `silencedetect` (loudness, level, silent
+gaps); and `scdet` + `blackdetect` + `freezedetect` (cuts, black frames, frozen
+frames). It combines these with the plan's caption track and whether the render
+actually burned it in.
+
+- **Scored** (each one is a weighted mean of named, measured components): Attention,
+  Retention, Visual Quality, Platform Fit. Formulas are in
+  [`asur/viral_check/dimensions.py`](asur/viral_check/dimensions.py).
+- **Unknown, with a reason** (never a made-up number): Value, Shareability,
+  Saveability, Replayability, Authenticity, Audience Fit, plus Satisfaction and
+  Originality unless a human rating is supplied.
+- **Risk flags** are binary and record the measured value:
+  - Hard: wrong aspect ratio, below 720p, over the upload ceiling.
+  - Soft: muted, loudness off -14 LUFS, silent gaps, static opening, mostly
+    frozen, captions missing, text too dense.
+- There is no single "% viral" number anywhere. The artifact is bound to the
+  file's sha256. The publish gate refuses (BLOCK) if the file on disk is not the
+  file that was measured.
+
+## The gates
+
+- **Script quality gate (13 checks)**, which checks content rather than whether
+  sections exist:
+  - hook is 4–14 words and clears the hook-score floor
+  - a concrete takeaway is present (a generic template value line HOLDs)
+  - no unsourced statistics and no invented first-person anecdotes
+  - no near-duplicate lines and no mechanical repetition of the subject
+  - a real CTA verb
+  - contiguous timings
+  - estimated speech duration fits the platform band
+- **18-state machine** (`asur run`): every transition runs real checks.
+  - Artifact checksums, hook pool, the 13 checks, timing vs platform.
+  - Hero proof rendered and verified.
+  - Human gate #1.
+  - Full render with file/duration/checksum QA.
+  - Measured viral check (REJECT holds).
+  - Human gate #2, publish checks: file present, sha256 matches the viral
+    check, viral verdict PASS, audio present, duration within platform bounds,
+    package written, licenses recorded.
+- ASUR never uploads. A human does that.
+
+---
+
+## Commands
+
+```bash
+asur script       --idea "..." [--takeaway "..."] [--llm ...] [--platform ...]
+asur generate     [--project P] [--platform ...] [--no-voice] [--force]   # plan + render latest approved script
+asur viral-check  path/to/video.mp4 [--platform ...]                       # measure any MP4
+asur run          --idea "..." [--takeaway "..."] [--self-approve]         # everything, gated
+asur render       # package an existing edit_plan + viral_check into youtube/<project>/package
+asur explain | verify-repro | insights | ab-resolve
 ```
 
-Use `/status` any time to see the current phase, test counts, open SPEC-GAPs, and
-the next human gate. Every phase writes tests first, builds, runs read-only code +
-security review in parallel, fixes, independently verifies the exit gate, stops at
-any human gate, then commits locally.
+Exit codes: `0` means the gate cleared, `1` means HELD (the reasons are
+printed), `2` means a usage error.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+python3 -m pytest -q                 # unit suite (ffmpeg-backed tests skip without ffmpeg)
+python3 -m pytest -q -m integration  # real renders; the SDXL test self-skips without asur[generation]
+ruff check .
+mypy asur
+```
+
+CI also asserts that importing the core pulls in no heavy or network
+dependency. Test counts are not hard-coded here; run the suite.
+
+Layout: `asur/core` (artifacts, gates, identity), `asur/script` (SCRIPT
+stages), `asur/llm` (provider interface; the network adapters are in
+`asur/llm/adapters`), `asur/generation` (planning, render, adapters),
+`asur/editing`, `asur/viral_check` (probe, facts, dimensions, verdict),
+`asur/orchestrator`, `asur/learning`, `asur/platforms`, `asur/tools` (pipeline,
+firewall projection, verify-repro). Design docs are in [`docs/`](docs/INDEX.md).
+Those are the original design and are aspirational where they disagree with
+this README.
+
+## Known limitations
+
+- The default visuals are solid colour cards. Real AI backgrounds, video, voice
+  and music adapters (SDXL, Wan 2.2, Kokoro, Stable Audio) live behind
+  `pip install -e ".[generation]"` and multi-GB local weights.
+- macOS `say` voices are licensed for personal, non-commercial use. The publish
+  gate lists this. Use espeak-ng or Kokoro for commercial posting.
+- Template copy is generic, because the subject phrase is inserted verbatim. Use
+  `--takeaway` and/or an LLM for real content.
+- Only 4 of the 12 viral-check dimensions are measurable from a file. The rest
+  need real audience data (`asur insights` / `ab-resolve` once performance is
+  recorded).
+
+## Related
+
+Life OS (Life Mentor + Weekly Tracker), formerly in this repo, now lives at https://github.com/prathamshukla28/life-os

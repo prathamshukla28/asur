@@ -136,30 +136,52 @@ def _scene_backgrounds(
     return resolved
 
 
-def _escape_drawtext(text: str) -> str:
-    """Escape a caption string for an ffmpeg drawtext ``text=`` value.
+def _escape_option_value(value: str) -> str:
+    """Escape *value* for use as one option value inside an ffmpeg filtergraph.
 
-    drawtext treats ``\\``, ``:``, ``'``, and ``%`` specially; a filtergraph also
-    splits on unescaped commas. Escape conservatively so the real authored words
-    render verbatim (no invention, no silent truncation).
+    FFmpeg parses a ``-vf``/``-filter_complex`` string with TWO escaping levels
+    (ffmpeg-filters(1), "Notes on filtergraph escaping"):
+
+      1. the filter's option parser treats ``\\``, ``'`` and ``:`` specially
+         (``:`` separates options), so each is backslash-escaped;
+      2. the filtergraph parser then treats ``\\``, ``'``, ``[``, ``]``, ``,``
+         and ``;`` specially, so the level-1 result is backslash-escaped again.
+
+    Applying both levels means any string (a path with spaces, apostrophes,
+    colons, commas, brackets or backslashes) reaches the filter verbatim.
+    Arguments are passed to ffmpeg as an argv list (no shell), so no shell
+    quoting is involved.
     """
-    out = text.replace("\\", "\\\\")
-    out = out.replace(":", "\\:")
-    out = out.replace("'", "\\'")
-    out = out.replace("%", "\\%")
-    out = out.replace(",", "\\,")
-    return out
+    level1 = "".join("\\" + ch if ch in "\\':" else ch for ch in value)
+    return "".join("\\" + ch if ch in "\\'[],;" else ch for ch in level1)
 
 
-def _drawtext_filter(text: str, *, height: int) -> str:
-    """Build a centred, safe-area drawtext filter for one card's caption."""
+def _escape_concat_path(path: str) -> str:
+    """Quote *path* for one ``file`` line of an ffmpeg concat-demuxer list.
+
+    The concat demuxer reads ``file '<path>'``; inside single quotes every byte
+    is literal except ``'`` itself, which is written as ``'\\''`` (close the
+    quote, an escaped apostrophe, reopen) - the same rule as a POSIX shell.
+    """
+    return "'" + path.replace("'", "'\\''") + "'"
+
+
+def _drawtext_filter(textfile: Path, *, height: int) -> str:
+    """Build a centred, safe-area drawtext filter for one card's caption.
+
+    The caption is read from *textfile* (``textfile=``) instead of being inlined
+    as ``text=``: the authored words then never pass through filtergraph
+    escaping at all, and ``expansion=none`` stops drawtext from interpreting
+    ``%{...}`` sequences, so apostrophes, colons, percent signs and backslashes
+    render verbatim. Only the file path is escaped (see _escape_option_value).
+    """
     font_size = max(height // _CAPTION_FONT_SIZE_DIVISOR, 12)
     y_px = round(height * _CAPTION_Y_FRACTION)
-    escaped = _escape_drawtext(text)
     # x centres the box; y sits on the safe-area anchor; a translucent box keeps
     # white text legible over any card colour.
     return (
-        f"drawtext=text='{escaped}'"
+        f"drawtext=textfile={_escape_option_value(str(textfile))}"
+        ":expansion=none"
         f":fontcolor=white:fontsize={font_size}"
         ":box=1:boxcolor=black@0.5:boxborderw=12"
         f":x=(w-text_w)/2:y={y_px}"
@@ -242,7 +264,9 @@ def _render_card(
             f"color=c={colour}:s={width}x{height}:r={fps}:d={seconds:.3f}",
         ]
     if caption:
-        vf_parts.append(_drawtext_filter(caption, height=height))
+        textfile = work / f"caption_{index:03d}.txt"
+        textfile.write_text(caption, encoding="utf-8")
+        vf_parts.append(_drawtext_filter(textfile, height=height))
     if vf_parts:
         cmd += ["-vf", ",".join(vf_parts)]
     cmd += [
@@ -291,8 +315,11 @@ def _concat(
       * neither -> silent.
     """
     listing = work / "concat.txt"
-    # concat demuxer wants: file '<abs path>' per line (quotes handle spaces).
-    listing.write_text("".join(f"file '{c.resolve()}'\n" for c in cards), encoding="utf-8")
+    # concat demuxer wants: file '<abs path>' per line, quoted per its rules.
+    listing.write_text(
+        "".join(f"file {_escape_concat_path(str(c.resolve()))}\n" for c in cards),
+        encoding="utf-8",
+    )
     cmd = [
         "ffmpeg",
         "-y",

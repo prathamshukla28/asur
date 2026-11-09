@@ -7,7 +7,7 @@ shell shared by all of them; the stage-specific payload lives in ``body``.
 
 Envelope fields (schema_version "asur.artifact/v1"):
   artifact_id    "<kind>-<shorthash>" - stable id derived from content hash.
-  kind           one of the 17 ASUR artifact kinds (see KINDS).
+  kind           one of the artifact kinds listed in KINDS.
   version        monotonic integer within (project_id, kind). Starts at 1.
   schema_version "asur.artifact/v1".
   project_id     the project this artifact belongs to.
@@ -49,9 +49,8 @@ __all__ = [
     "verify_checksum",
 ]
 
-# The 17 artifact kinds across the full ASUR lifecycle. Phase 1 produces the
-# first six (idea..script) plus the quality gate's qa_report-style output;
-# the rest are declared now so ids and validation are stable across phases.
+# Every artifact kind across the ASUR lifecycle (len(KINDS) is the count; do not
+# restate it in prose). Declared up front so ids and validation stay stable.
 KINDS = (
     "idea",
     "input_report",

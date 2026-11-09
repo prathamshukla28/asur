@@ -1,5 +1,14 @@
 # ASUR — VIRAL CHECK (Evaluation Doctrine)
 
+> **Implementation status (current code):** the evaluator measures the rendered MP4
+> with ffprobe/ffmpeg (`asur/viral_check/probe.py`). Attention, Retention, Visual
+> Quality and Platform Fit are scored from those measurements; Satisfaction and
+> Originality only from a supplied human rating; Value, Shareability, Saveability,
+> Replayability, Authenticity and Audience Fit are reported as `unknown` (no
+> number) because a file probe cannot measure them. Formulas:
+> `asur/viral_check/dimensions.py`. Where this design doc describes more, it is
+> the target, not the shipped behaviour.
+
 > VIRAL CHECK is the **evaluation / challenge** instrument (Trinity's CRUCIBLE ancestor).
 > Workbench `.viral/`. Root report `VERDICT.md`.
 > It answers one honest question: **"Does this video have a realistic chance of

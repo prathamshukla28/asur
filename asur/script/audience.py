@@ -12,10 +12,20 @@ specific person with a specific pain, not a generic "everyone".
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
+from ..llm import LLMProvider, draft_or_fallback
 from . import source_ref
 from .evidence import EMPIRICAL, HYPOTHESIS, STRONG_EVIDENCE, claim
+from .llm_schema import as_str_list
+
+_SYSTEM = (
+    "You help a short-form video creator understand their viewers. Reply with ONE "
+    "JSON object only. Describe plausible viewer feelings; never invent "
+    "demographics or statistics."
+)
 
 
 def _subject(idea_artifact: Artifact) -> str:
@@ -29,23 +39,18 @@ def _language(idea_artifact: Artifact) -> str:
     return (idea_artifact.body or {}).get("language", "en")
 
 
-def build_audience(
-    idea_artifact: Artifact,
-    research_artifact: Artifact,
-    project_id: str,
-    *,
-    identity: Identity | None = None,
-) -> Artifact:
-    """Produce an ``audience`` artifact from ``idea`` + ``research``."""
-    subject = _subject(idea_artifact)
-    language = _language(idea_artifact)
-
-    demographics = {
-        "value": "unspecified - inferred as general short-form viewers interested in "
-        f"{subject}",
-        "how_derived": "no personal data available; kept honest rather than invented",
+def _validate_llm(data: Any, label: str) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("expected a JSON object")
+    basis = f"drafted by {label}; plausible, not measured for this viewer"
+    return {
+        key: [claim(t, HYPOTHESIS, basis=basis) for t in as_str_list(data.get(key), 2, 5)]
+        for key in ("pains", "desires", "objections")
     }
 
+
+def _template_feelings(subject: str) -> dict[str, Any]:
+    """The deterministic offline template for pains / desires / objections."""
     pains = [
         claim(
             f"Confused or overwhelmed by conflicting advice on {subject}.",
@@ -85,11 +90,46 @@ def build_audience(
         ),
     ]
 
+    return {"pains": pains, "desires": desires, "objections": objections}
+
+
+def build_audience(
+    idea_artifact: Artifact,
+    research_artifact: Artifact,
+    project_id: str,
+    *,
+    identity: Identity | None = None,
+    generator: LLMProvider | None = None,
+) -> Artifact:
+    """Produce an ``audience`` artifact from ``idea`` + ``research``.
+
+    ``generator`` optionally drafts pains/desires/objections with an LLM (tagged
+    HYPOTHESIS); otherwise, or on invalid output, the template is used.
+    """
+    subject = _subject(idea_artifact)
+    language = _language(idea_artifact)
+    demographics = {
+        "value": "unspecified - inferred as general short-form viewers interested in "
+        f"{subject}",
+        "how_derived": "no personal data available; kept honest rather than invented",
+    }
+    angles = ", ".join(a.get("angle", "") for a in (research_artifact.body or {}).get("angles", []))
+    feelings, provenance = draft_or_fallback(
+        generator,
+        prompt=(
+            f"Topic: {subject!r}. Research angles: {angles}.\n"
+            'Return JSON {"pains": [2-5 strings], "desires": [2-5 strings], '
+            '"objections": [2-5 strings]} describing what a viewer of a short video '
+            "on this topic feels."
+        ),
+        system=_SYSTEM,
+        validate=lambda data: _validate_llm(data, generator.label if generator else ""),
+        fallback=lambda: _template_feelings(subject),
+    )
+
     body = {
         "demographics": demographics,
-        "pains": pains,
-        "desires": desires,
-        "objections": objections,
+        **feelings,
         "awareness_level": {
             "value": "problem-aware",
             "how_derived": "idea frames a known problem, not an unknown need",
@@ -107,7 +147,12 @@ def build_audience(
                 basis="to be filled from this creator's SCRIPT memory once it exists",
             ),
         ],
-        "method": "local inference from idea + research; no network used",
+        **provenance,
+        "method": (
+            "local inference from idea + research; no network used"
+            if provenance["generator"] == "template"
+            else f"pains/desires/objections drafted by {provenance['generator']}"
+        ),
     }
 
     return make_artifact(

@@ -24,6 +24,7 @@ STDLIB_ONLY_PACKAGES = (
     "viral_check",
     "learning",
     "platforms",
+    "llm",
 )
 
 NETWORK_FORBIDDEN = frozenset(
@@ -68,11 +69,7 @@ MEDIA_FORBIDDEN = frozenset(
 )
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "asur"
-# Life Mentor (top-level sibling package) is stdlib-only end to end: every
-# module is linted, and it may import only the stdlib, `asur`, or itself.
-LIFE_MENTOR_ROOT = Path(__file__).resolve().parent.parent / "products" / "life_mentor"
-WEEKLY_TRACKER_ROOT = Path(__file__).resolve().parent.parent / "products" / "weekly_tracker"
-ALLOWED_FIRST_PARTY = frozenset({"asur", "life_mentor", "weekly_tracker"})
+ALLOWED_FIRST_PARTY = frozenset({"asur"})
 
 
 def _stdlib_names() -> frozenset[str]:
@@ -94,10 +91,6 @@ def _iter_stdlib_only_modules():
             if "adapters" in path.parts:
                 continue
             yield path
-    if LIFE_MENTOR_ROOT.is_dir():
-        yield from sorted(LIFE_MENTOR_ROOT.rglob("*.py"))
-    if WEEKLY_TRACKER_ROOT.is_dir():
-        yield from sorted(WEEKLY_TRACKER_ROOT.rglob("*.py"))
 
 
 def _imported_top_level(path: Path) -> set[str]:
@@ -139,54 +132,17 @@ def test_boundary_covers_modules() -> None:
     assert found, "boundary test found no core/script modules to lint (misconfigured)"
 
 
-def test_boundary_covers_life_mentor() -> None:
-    found = [p for p in _iter_stdlib_only_modules() if LIFE_MENTOR_ROOT in p.parents]
-    assert found, "boundary test does not lint life_mentor/ (misconfigured)"
+def test_llm_interface_is_linted_but_network_adapters_are_not() -> None:
+    """The provider interface (asur/llm) stays stdlib-only; the urllib/anthropic
+    adapters live under asur/llm/adapters/ and are lazy-imported on demand."""
+    found = {p.relative_to(PACKAGE_ROOT).as_posix() for p in _iter_stdlib_only_modules()}
+    assert "llm/__init__.py" in found
+    assert not any(p.startswith("llm/adapters/") for p in found)
 
 
-def test_boundary_covers_life_mentor_health() -> None:
-    health = LIFE_MENTOR_ROOT / "health"
-    found = {p.name for p in _iter_stdlib_only_modules() if health in p.parents}
-    assert {"usda.py", "foods.py", "nutrition.py", "safety.py"} <= found
+def test_cli_entry_point_is_importable() -> None:
+    from asur.cli import build_parser, main
 
-
-def test_life_mentor_bundles_no_restricted_food_tables() -> None:
-    # SPEC-GAP LM-G2: only CC0 USDA data may be bundled; never IFCT/INDB/GI tables.
-    data = [p.name.casefold() for p in LIFE_MENTOR_ROOT.rglob("*") if p.is_file()]
-    assert not [n for n in data if any(t in n for t in ("ifct", "indb", "glycemic_index"))]
-
-
-@pytest.mark.parametrize(("subpkg", "modules"), [
-    ("lifestyle", {"exercise.py", "sleep.py", "habits.py"}),
-    ("tracking", {"metrics.py"}),
-    ("career", {"offers.py", "education.py", "market.py"}),
-])
-def test_boundary_covers_life_mentor_lm07_lm08(subpkg: str, modules: set) -> None:
-    root = LIFE_MENTOR_ROOT / subpkg
-    found = {p.name for p in _iter_stdlib_only_modules() if root in p.parents}
-    assert modules <= found
-
-
-def test_boundary_covers_weekly_tracker() -> None:
-    found = {p.relative_to(WEEKLY_TRACKER_ROOT).as_posix() for p in _iter_stdlib_only_modules()
-             if WEEKLY_TRACKER_ROOT in p.parents}
-    assert {"week.py", "planner.py", "render.py", "cli.py", "sources/git_work.py",
-            "sources/life_mentor.py"} <= found
-
-
-@pytest.mark.parametrize(("rel", "modules"), [
-    ("reports", {"render.py", "builders.py"}),
-    ("integrations", {"bank_csv.py", "amfi_nav.py"}),
-    ("", {"cli.py"}),
-])
-def test_boundary_covers_life_mentor_lm09_lm10(rel: str, modules: set) -> None:
-    root = LIFE_MENTOR_ROOT / rel if rel else LIFE_MENTOR_ROOT
-    found = {p.name for p in _iter_stdlib_only_modules() if p.parent == root}
-    assert modules <= found
-
-
-def test_life_mentor_cli_entry_point_declared() -> None:
-    text = (PACKAGE_ROOT.parent / "pyproject.toml").read_text(encoding="utf-8")
-    for line in ('asur = "asur.cli:main"', 'weekly-tracker = "weekly_tracker.cli:main"',
-                 'life-mentor = "life_mentor.cli:main"'):
-        assert line in text
+    assert callable(main)
+    commands = build_parser()._subparsers._group_actions[0].choices  # type: ignore[union-attr]
+    assert {"script", "generate", "viral-check", "run"} <= set(commands)

@@ -3,9 +3,15 @@
 Takes the ``strategy`` artifact and produces a ``hooks`` artifact: at least 20
 original hook candidates spanning several strategic directions, each scored on
 15 dimensions and tagged with the deep hook-intelligence metadata from
-DATA_MODELS.md s4.1. No network (ASUR-LOCAL-01). Scoring is deterministic -
-the same strategy always yields the same scores (ASUR-HONEST-01 reproducibility,
-no un-seeded randomness).
+DATA_MODELS.md s4.1. Scoring is deterministic - the same candidates always yield
+the same scores - and every score is a documented function of measurable text
+features of the hook itself (see ``hook_features`` and ``_DIM_FORMULAS``). There
+is no hash jitter and no per-template prior: two hooks only score differently
+because their text differs in a way the features can name.
+
+Candidates come from the template library and, optionally, from an LLM provider
+(``asur.llm``); both are scored by the same feature model and each hook records
+which generator produced it.
 
 Hooks are psychological patterns, not copied templates. The library categories
 (curiosity / contrarian / story / data / authority / practical / question /
@@ -21,11 +27,14 @@ records a ``first_frame`` and ``first_motion`` intent.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
+from ..llm import TEMPLATE, LLMProvider, draft_or_fallback
 from . import source_ref
+from .llm_schema import clean_text
 
 # 15 scoring dimensions, each 0-100 (DATA_MODELS.md s4.1).
 SCORE_DIMS = (
@@ -90,22 +99,12 @@ def _strategy_field(strategy_artifact: Artifact, name: str, default: str) -> str
     return default
 
 
-def _det_unit(seed: str) -> float:
-    """Deterministic value in [0, 1) derived from a string seed.
-
-    Pure hash-based; no randomness, so runs are reproducible (ASUR-HONEST-01).
-    """
-    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
-    return int(digest[:8], 16) / 0xFFFFFFFF
-
-
 def _clamp(value: float) -> int:
     return max(0, min(100, round(value)))
 
 
-# Each template produces one hook from a subject + action. ``base`` dims give
-# the structural strengths/weaknesses of that pattern before subject-specific
-# jitter is applied. Everything here is editable, explainable heuristic.
+# Each template produces one hook from a subject + action. The template only
+# supplies structure + metadata; the score comes from the rendered text.
 _TEMPLATES: tuple[dict[str, Any], ...] = (
     {
         "category": "curiosity",
@@ -114,7 +113,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["curiosity", "open_loop"],
         "emotion": "curiosity",
         "render": lambda s, a: f"Most people get {s} completely wrong - here's why.",
-        "base": {"attention": 82, "curiosity": 90, "clarity": 70, "payoff": 68},
     },
     {
         "category": "contrarian",
@@ -123,7 +121,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["contradiction", "identity"],
         "emotion": "surprise",
         "render": lambda s, a: f"Everything you believe about {s} is holding you back.",
-        "base": {"attention": 85, "novelty": 80, "credibility": 60, "emotional": 72},
     },
     {
         "category": "story",
@@ -132,7 +129,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["story", "emotional_connection"],
         "emotion": "empathy",
         "render": lambda s, a: f"I wasted months on {s} before I understood this.",
-        "base": {"authenticity": 88, "emotional": 82, "attention": 72, "specificity": 70},
     },
     {
         "category": "data",
@@ -141,7 +137,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["specificity", "credibility"],
         "emotion": "surprise",
         "render": lambda s, a: f"Nine out of ten people handle {s} the expensive way.",
-        "base": {"specificity": 85, "credibility": 78, "clarity": 80, "novelty": 66},
     },
     {
         "category": "authority",
@@ -150,7 +145,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["authority", "usefulness"],
         "emotion": "aspiration",
         "render": lambda s, a: f"After years around {s}, here's the one rule that matters.",
-        "base": {"credibility": 84, "clarity": 76, "payoff": 78, "authenticity": 74},
     },
     {
         "category": "practical",
@@ -159,7 +153,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["usefulness", "specificity"],
         "emotion": "aspiration",
         "render": lambda s, a: f"Get {s} right in the next 30 seconds - no fluff.",
-        "base": {"clarity": 86, "payoff": 80, "platform_fit": 82, "specificity": 74},
     },
     {
         "category": "question",
@@ -168,7 +161,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["curiosity", "identity"],
         "emotion": "curiosity",
         "render": lambda s, a: f"Why does {s} feel so much harder than it should?",
-        "base": {"curiosity": 82, "relevance": 80, "attention": 74, "clarity": 72},
     },
     {
         "category": "cost",
@@ -177,7 +169,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["loss_aversion", "urgency"],
         "emotion": "concern",
         "render": lambda s, a: f"The hidden cost of getting {s} wrong is bigger than you think.",
-        "base": {"emotional": 80, "attention": 78, "curiosity": 76, "payoff": 70},
     },
     {
         "category": "transformation",
@@ -186,7 +177,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["transformation", "aspiration"],
         "emotion": "aspiration",
         "render": lambda s, a: f"Here's what changes the moment {s} finally clicks.",
-        "base": {"emotional": 78, "payoff": 82, "curiosity": 74, "visual_potential": 80},
     },
     {
         "category": "myth",
@@ -195,7 +185,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["contradiction", "credibility"],
         "emotion": "surprise",
         "render": lambda s, a: f"The most repeated advice about {s} is quietly wrong.",
-        "base": {"novelty": 78, "credibility": 70, "curiosity": 80, "attention": 76},
     },
     {
         "category": "hinglish",
@@ -204,7 +193,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["curiosity", "authority"],
         "emotion": "curiosity",
         "render": lambda s, a: f"{s} ke baare mein ye baat koi nahi batata.",
-        "base": {"attention": 84, "curiosity": 86, "authenticity": 80, "audience_fit": 78},
     },
     {
         "category": "hinglish",
@@ -213,7 +201,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["contradiction", "identity"],
         "emotion": "surprise",
         "render": lambda s, a: f"Sab bol rahe the {s} aise nahi chalega - galat the.",
-        "base": {"attention": 83, "novelty": 76, "emotional": 74, "audience_fit": 80},
     },
     {
         "category": "hindi",
@@ -222,7 +209,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["curiosity", "relevance"],
         "emotion": "curiosity",
         "render": lambda s, a: f"{s} itna mushkil kyun lagta hai, pata hai?",
-        "base": {"curiosity": 80, "relevance": 82, "authenticity": 82, "audience_fit": 80},
     },
     {
         "category": "indian-en",
@@ -231,7 +217,6 @@ _TEMPLATES: tuple[dict[str, Any], ...] = (
         "psychology": ["usefulness", "specificity"],
         "emotion": "aspiration",
         "render": lambda s, a: f"One simple shift and {s} finally gets easy.",
-        "base": {"clarity": 84, "payoff": 78, "platform_fit": 80, "audience_fit": 78},
     },
 )
 
@@ -242,7 +227,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "specific",
         "psychology": ["specificity"],
         "render": lambda s, a: f"The one detail about {s} that changes the whole outcome.",
-        "base": {"specificity": 84, "clarity": 80, "payoff": 76, "curiosity": 74},
         "category": "practical",
         "pattern": "single_detail",
         "language": "en",
@@ -252,7 +236,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "mistake",
         "psychology": ["loss_aversion"],
         "render": lambda s, a: f"This tiny mistake with {s} costs people the most.",
-        "base": {"attention": 80, "emotional": 76, "curiosity": 78, "relevance": 78},
         "category": "cost",
         "pattern": "small_mistake",
         "language": "en",
@@ -262,7 +245,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "proof",
         "psychology": ["credibility", "proof"],
         "render": lambda s, a: f"I tested the usual advice on {s}. Here's what actually held up.",
-        "base": {"credibility": 82, "authenticity": 82, "payoff": 78, "specificity": 76},
         "category": "data",
         "pattern": "tested_claim",
         "language": "en",
@@ -272,7 +254,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "reframe",
         "psychology": ["novelty", "transformation"],
         "render": lambda s, a: f"Stop thinking of {s} as hard. Think of it like this.",
-        "base": {"novelty": 80, "clarity": 78, "emotional": 74, "payoff": 76},
         "category": "transformation",
         "pattern": "reframe",
         "language": "en",
@@ -282,7 +263,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "insider-en",
         "psychology": ["authority", "curiosity"],
         "render": lambda s, a: f"What people who are great at {s} never say out loud.",
-        "base": {"curiosity": 84, "credibility": 80, "attention": 80, "novelty": 76},
         "category": "authority",
         "pattern": "unspoken_rule",
         "language": "en",
@@ -292,7 +272,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "question-stakes",
         "psychology": ["curiosity", "loss_aversion"],
         "render": lambda s, a: f"What if the way you learned {s} was the slow way?",
-        "base": {"curiosity": 82, "attention": 76, "emotional": 74, "relevance": 78},
         "category": "question",
         "pattern": "what_if",
         "language": "en",
@@ -302,7 +281,6 @@ _VARIANT_SUFFIXES: tuple[dict[str, Any], ...] = (
         "tag": "story-turn",
         "psychology": ["story", "transformation"],
         "render": lambda s, a: f"The day {s} finally made sense, everything got easier.",
-        "base": {"authenticity": 84, "emotional": 80, "payoff": 78, "visual_potential": 76},
         "category": "story",
         "pattern": "turning_point",
         "language": "en",
@@ -341,42 +319,141 @@ def _template_fatigue(text: str) -> tuple[int, str]:
     return 10, "no over-used template phrasing detected"
 
 
-def _score_hook(
-    template: dict[str, Any],
+# -- feature model -----------------------------------------------------------
+#
+# Every hook score is a weighted sum of these text features (each in [0, 1]).
+# They are deliberately simple and inspectable; each hook records its feature
+# values so any score can be recomputed by hand from ``_DIM_FORMULAS``.
+
+_WORD = re.compile(r"[a-z0-9']+")
+_NUMBER_WORDS = frozenset(
+    "one two three four five six seven eight nine ten eleven twelve twenty thirty "
+    "hundred thousand million half".split()
+)
+_SECOND_PERSON = frozenset({"you", "your", "you're", "yours", "yourself", "aap", "tum", "tumhe"})
+_VAGUE = frozenset({"thing", "things", "stuff", "everything", "something", "anything"})
+_STOPWORDS = frozenset(
+    "a an the of on in to for and or with about is are be it this that how why what "
+    "most people".split()
+)
+# Curiosity-gap cues: an open question or a withheld answer.
+_CURIOSITY = (
+    r"\bwhy\b", r"\bwhat\b", r"\bhere'?s (why|what|how)\b", r"\bthe one\b",
+    r"\bnever\b", r"\b(secret|hidden|nobody|koi nahi)\b", r"\?\s*$",
+    r"\bbefore\b", r"\bwhat if\b", r"\bactually\b",
+)
+# Contrast / stakes cues: contradiction or loss framing.
+_CONTRAST = (
+    r"\bwrong\b", r"\bmyth\b", r"\bstop\b", r"\bmistake\b", r"\bcosts?\b",
+    r"\bwast", r"\bholding you back\b", r"\bgalat\b", r"\bexpensive\b", r"\bhidden cost\b",
+)
+# Payoff-promise cues: the hook commits to giving something.
+_PROMISE = (
+    r"\bhere'?s\b", r"\bthe one\b", r"\brule\b", r"\bfix", r"\bright\b",
+    r"\bchanges\b", r"\bthink of it\b", r"\bheld up\b", r"\beasy\b", r"\bclicks\b",
+)
+# Claims the system cannot verify: invented statistics or first-person experience.
+_UNVERIFIABLE = (
+    r"\b\d+\s*%", r"\b\d+ out of \d+\b",
+    r"\b(one|two|three|four|five|six|seven|eight|nine) out of (ten|\w+)\b",
+    r"\bstudies show\b",
+    r"\bi (tested|wasted|learned|spent|tried|lost|made)\b", r"\bafter years\b",
+)
+
+
+def _count(patterns: tuple[str, ...], low: str) -> int:
+    return sum(1 for pat in patterns if re.search(pat, low))
+
+
+def hook_features(
     text: str,
+    *,
     subject: str,
-    strategy_emotion: str,
+    language: str,
     language_target: str,
-) -> tuple[dict[str, int], int, str]:
-    base = template.get("base", {})
+    emotion: str,
+    strategy_emotion: str,
+    novelty_vs_prior: float,
+) -> dict[str, float]:
+    """Measure the documented text features of one hook (all in [0, 1]).
+
+    - length: 1.0 for 6-14 words; decays linearly outside (0 at <=0 / >=24 words)
+    - number: 1.0 if the hook contains a digit or a number word
+    - second_person: 1.0 if it addresses the viewer ("you", "your", "aap", ...)
+    - curiosity: 0.5 per curiosity-gap cue, capped at 1.0
+    - contrast: 0.5 per contradiction / loss-framing cue, capped at 1.0
+    - promise: 0.5 per payoff-promise cue, capped at 1.0
+    - question: 1.0 if the hook ends with "?"
+    - subject: share of the subject's content words that appear in the hook
+    - concrete: 1 - 3 x (share of vague words like "thing(s)", "stuff")
+    - verifiable: 0.0 if the hook asserts a statistic or personal experience the
+      system cannot verify (e.g. "nine out of ten", "I tested"), else 1.0
+    - not_tired: 0.0 if it uses an over-used template opener, else 1.0
+    - language_match: 1.0 if the hook's language is the strategy's target
+    - emotion_match: 1.0 if the hook's emotion is the strategy's emotion
+    - novel_vs_prior: word-overlap distance to the nearest remembered hook
+    """
+    low = text.lower()
+    words = _WORD.findall(low)
+    n = len(words)
+    if 6 <= n <= 14:
+        length = 1.0
+    elif n < 6:
+        length = max(0.0, n / 6)
+    else:
+        length = max(0.0, 1 - (n - 14) / 10)
+    subject_terms = [w for w in _WORD.findall(subject.lower()) if w not in _STOPWORDS]
+    subject_hit = (
+        sum(1 for w in subject_terms if w in words) / len(subject_terms) if subject_terms else 0.0
+    )
+    vague = sum(1 for w in words if w in _VAGUE)
+    fatigue, _reason = _template_fatigue(text)
+    return {
+        "length": round(length, 3),
+        "number": 1.0 if (re.search(r"\d", low) or any(w in _NUMBER_WORDS for w in words)) else 0.0,
+        "second_person": 1.0 if any(w in _SECOND_PERSON for w in words) else 0.0,
+        "curiosity": min(1.0, 0.5 * _count(_CURIOSITY, low)),
+        "contrast": min(1.0, 0.5 * _count(_CONTRAST, low)),
+        "promise": min(1.0, 0.5 * _count(_PROMISE, low)),
+        "question": 1.0 if low.rstrip().endswith("?") else 0.0,
+        "subject": round(subject_hit, 3),
+        "concrete": round(max(0.0, 1 - 3 * (vague / n if n else 1.0)), 3),
+        "verifiable": 0.0 if _count(_UNVERIFIABLE, low) else 1.0,
+        "not_tired": 0.0 if fatigue >= 80 else 1.0,
+        "language_match": 1.0 if language == language_target else 0.0,
+        "emotion_match": 1.0 if emotion == strategy_emotion else 0.0,
+        "novel_vs_prior": round(max(0.0, min(1.0, novelty_vs_prior)), 3),
+    }
+
+
+# score(dim) = round(100 * (bias + sum(weight * feature))); each row sums to 1.0,
+# so every dimension spans 0-100 and is fully determined by the features above.
+_DIM_FORMULAS: dict[str, tuple[float, dict[str, float]]] = {
+    "attention": (0.30, {"curiosity": 0.25, "contrast": 0.20, "second_person": 0.10, "length": 0.15}),
+    "curiosity": (0.20, {"curiosity": 0.60, "question": 0.10, "contrast": 0.10}),
+    "clarity": (0.20, {"length": 0.40, "concrete": 0.40}),
+    "specificity": (0.15, {"number": 0.30, "concrete": 0.30, "subject": 0.25}),
+    "relevance": (0.20, {"subject": 0.50, "second_person": 0.15, "emotion_match": 0.15}),
+    "novelty": (0.30, {"contrast": 0.35, "not_tired": 0.35}),
+    "credibility": (0.40, {"verifiable": 0.40, "concrete": 0.20}),
+    "emotional": (0.25, {"contrast": 0.30, "second_person": 0.20, "emotion_match": 0.25}),
+    "payoff": (0.25, {"promise": 0.45, "subject": 0.30}),
+    "authenticity": (0.40, {"verifiable": 0.40, "not_tired": 0.20}),
+    "visual_potential": (0.30, {"concrete": 0.35, "number": 0.15, "contrast": 0.20}),
+    "retention_potential": (0.20, {"curiosity": 0.40, "promise": 0.25, "length": 0.15}),
+    "audience_fit": (0.30, {"language_match": 0.40, "second_person": 0.30}),
+    "platform_fit": (0.30, {"length": 0.50, "not_tired": 0.20}),
+    "originality": (0.20, {"not_tired": 0.40, "novel_vs_prior": 0.40}),
+}
+
+
+def score_from_features(features: dict[str, float]) -> dict[str, int]:
+    """Apply ``_DIM_FORMULAS`` to a feature vector -> 15 dimension scores (0-100)."""
     scores: dict[str, int] = {}
     for dim in SCORE_DIMS:
-        # Start from the template's structural strength for this dim, or a
-        # neutral 65 if the template is silent on it.
-        start = base.get(dim)
-        if not start:
-            start = 65
-        # Deterministic +/-6 jitter keyed by (text, dim) so ranking is stable
-        # but not perfectly flat across hooks.
-        jitter = (_det_unit(f"{text}|{dim}") - 0.5) * 12
-        value = start + jitter
-        # Emotion alignment nudges emotional/relevance up.
-        if dim in ("emotional", "relevance") and template.get("emotion") == strategy_emotion:
-            value += 5
-        # Platform fit: short lines favored on Reels.
-        if dim == "platform_fit":
-            value += 6 if len(text) <= 70 else -6
-        # Language fit: reward matching the strategy's target language.
-        if dim == "audience_fit" and template.get("language") == language_target:
-            value += 6
-        scores[dim] = _clamp(value)
-
-    # Originality: penalise tired templates.
-    fatigue_score, fatigue_reason = _template_fatigue(text)
-    if fatigue_score >= 80:
-        scores["originality"] = _clamp(scores["originality"] - 30)
-
-    return scores, fatigue_score, fatigue_reason
+        bias, weights = _DIM_FORMULAS[dim]
+        scores[dim] = _clamp(100 * (bias + sum(w * features[f] for f, w in weights.items())))
+    return scores
 
 
 def _aggregate(scores: dict[str, int]) -> int:
@@ -496,18 +573,77 @@ def _ab_variants(ranked: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+_LLM_SYSTEM = (
+    "You write opening hooks for short vertical videos. Reply with ONE JSON object "
+    "only. Hooks must be one sentence, under 16 words, and must not invent "
+    "statistics or claim personal experience."
+)
+_CATEGORY_DEFAULTS = {t["category"]: t for t in _TEMPLATES if t.get("language") == "en"}
+MAX_LLM_HOOKS = 8
+
+
+def _validate_llm_hooks(data: Any) -> list[dict[str, str]]:
+    """Coerce an LLM reply into up to MAX_LLM_HOOKS {text, category} candidates."""
+    items = data.get("hooks") if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        raise ValueError("expected a 'hooks' list")
+    out: list[dict[str, str]] = []
+    for item in items[:MAX_LLM_HOOKS]:
+        text = item.get("hook") if isinstance(item, dict) else item
+        category = item.get("category", "curiosity") if isinstance(item, dict) else "curiosity"
+        out.append({"text": clean_text(text, max_chars=160), "category": str(category)})
+    if not out:
+        raise ValueError("no hooks in reply")
+    return out
+
+
+def _no_llm_hooks() -> list[dict[str, str]]:
+    return []
+
+
+def _llm_candidates(
+    generator: LLMProvider | None, subject: str, strategy_emotion: str
+) -> tuple[list[tuple[dict[str, Any], str, str]], dict[str, Any]]:
+    """Ask the LLM for extra hook lines; returns (candidates, provenance)."""
+    if generator is None:
+        return [], {"generator": TEMPLATE}
+    cats = ", ".join(sorted(_CATEGORY_DEFAULTS))
+    drafted, provenance = draft_or_fallback(
+        generator,
+        prompt=(
+            f"Topic: {subject!r}. Target emotion: {strategy_emotion}.\n"
+            f'Return JSON {{"hooks": [{{"hook": str, "category": one of [{cats}]}}]}} '
+            f"with {MAX_LLM_HOOKS} distinct hooks."
+        ),
+        system=_LLM_SYSTEM,
+        validate=_validate_llm_hooks,
+        fallback=_no_llm_hooks,
+    )
+    candidates = []
+    for item in drafted:
+        template = _CATEGORY_DEFAULTS.get(item["category"], _CATEGORY_DEFAULTS["curiosity"])
+        candidates.append((template, item["text"], provenance["generator"]))
+    return candidates, provenance
+
+
 def build_hooks(
     strategy_artifact: Artifact,
     project_id: str,
     *,
     identity: Identity | None = None,
     prior_hooks: list[str] | None = None,
+    generator: LLMProvider | None = None,
 ) -> Artifact:
     """Produce a ``hooks`` artifact (>=20 scored, ranked hooks) from strategy.
 
     ``prior_hooks`` is an optional list of hook texts this creator has used
-    before, enabling the originality + hook-fatigue checks. In Phase 1 this is
-    typically empty; it is wired for SCRIPT memory in later phases.
+    before, enabling the originality + hook-fatigue checks. ``generator`` is an
+    optional LLM provider whose hooks join the template candidates and are scored
+    by the same feature model.
+
+    Ranking: aggregate score (desc), then fewer words (shorter hooks land inside
+    the first seconds), then candidate order (templates in library order, then
+    LLM hooks in reply order). Deterministic for a given candidate list.
     """
     subject = _subject(strategy_artifact)
     strategy_emotion = _strategy_field(strategy_artifact, "emotion", "curiosity")
@@ -515,17 +651,31 @@ def build_hooks(
     action = "save"
     prior_texts = list(prior_hooks or [])
 
-    templates = list(_TEMPLATES) + list(_VARIANT_SUFFIXES)
+    candidates: list[tuple[dict[str, Any], str, str]] = [
+        (template, template["render"](subject, action).strip(), TEMPLATE)
+        for template in list(_TEMPLATES) + list(_VARIANT_SUFFIXES)
+    ]
+    llm_candidates, llm_provenance = _llm_candidates(generator, subject, strategy_emotion)
+    candidates += llm_candidates
 
     generated: list[dict[str, Any]] = []
     seen_texts: list[str] = []
-    for idx, template in enumerate(templates):
-        text = template["render"](subject, action).strip()
-        scores, tmpl_fatigue, tmpl_reason = _score_hook(
-            template, text, subject, strategy_emotion, language_target
-        )
-        aggregate = _aggregate(scores)
+    for order, (template, text, made_by) in enumerate(candidates):
+        if text.lower() in (t.lower() for t in seen_texts):
+            continue  # an LLM may echo a template line; keep the first
         originality = _originality_verdict(text, prior_texts + seen_texts)
+        features = hook_features(
+            text,
+            subject=subject,
+            language=template.get("language", "en"),
+            language_target=language_target,
+            emotion=template.get("emotion", "curiosity"),
+            strategy_emotion=strategy_emotion,
+            novelty_vs_prior=originality["distance"],
+        )
+        scores = score_from_features(features)
+        tmpl_fatigue, tmpl_reason = _template_fatigue(text)
+        aggregate = _aggregate(scores)
         # Hook fatigue: has this creator already used a near-identical hook?
         hook_fatigue = _clamp(
             80 if originality["distance"] <= 0.4 and prior_texts else 12
@@ -535,17 +685,20 @@ def build_hooks(
             {
                 "hook_id": hook_id,
                 "scores": scores,
+                "features": features,
                 "aggregate": aggregate,
                 "hook_fatigue_score": hook_fatigue,
                 "template_fatigue_score": tmpl_fatigue,
                 "template_fatigue_reason": tmpl_reason,
                 "originality": originality,
                 "first_three_seconds": _first_three_seconds(template, subject),
+                "candidate_order": order,
                 "metadata": {
                     "hook": text,
+                    "generator": made_by,
                     "language": template.get("language", "en"),
                     "category": template.get("category", "general"),
-                    "pattern": template.get("pattern", "unknown"),
+                    "pattern": template.get("pattern", "unknown") if made_by == TEMPLATE else "llm_drafted",
                     "psychology": template.get("psychology", []),
                     "emotion": template.get("emotion", "curiosity"),
                     "promise": f"one clear, honest takeaway about {subject}",
@@ -557,15 +710,16 @@ def build_hooks(
         )
         seen_texts.append(text)
 
-    # Rank by aggregate (desc), tie-broken by hook_id for determinism.
     ranked = sorted(
-        generated, key=lambda h: (-h["aggregate"], h["hook_id"])
+        generated,
+        key=lambda h: (-h["aggregate"], len(h["metadata"]["hook"].split()), h["candidate_order"]),
     )
     for rank, hook in enumerate(ranked, start=1):
         hook["rank"] = rank
 
     selected_hook_id = ranked[0]["hook_id"] if ranked else None
     ab_variants = _ab_variants(ranked)
+    llm_used = any(h["metadata"]["generator"] != TEMPLATE for h in ranked)
 
     body = {
         "subject": subject,
@@ -577,14 +731,21 @@ def build_hooks(
         "selected_hook_id": selected_hook_id,
         "ab_variants": ab_variants,
         "selection_reason": (
-            "highest aggregate across 15 dimensions; ties broken deterministically "
-            "by hook id (reproducible, ASUR-HONEST-01)"
+            "highest aggregate (mean of 15 feature-derived dimensions); ties broken by "
+            "fewer words, then candidate order (reproducible, ASUR-HONEST-01)"
         ),
+        "scoring_model": {
+            "features": "see asur.script.hooks.hook_features (each hook records its values)",
+            "formula": "score(dim) = round(100 * (bias + sum(weight * feature)))",
+            "weights": {dim: {"bias": b, **w} for dim, (b, w) in _DIM_FORMULAS.items()},
+        },
         "first_three_seconds_blueprint": (
             "0.0-0.5s pattern interrupt / 0.5-1.5s core hook / "
             "1.5-2.5s curiosity promise / 2.5-3.0s transition"
         ),
-        "method": "local heuristic hook engine; deterministic scoring; no network",
+        "generator": f"{TEMPLATE}+{llm_provenance['generator']}" if llm_used else TEMPLATE,
+        **({"llm_fallback": llm_provenance["llm_fallback"]} if "llm_fallback" in llm_provenance else {}),
+        "method": "template + optional LLM candidates; deterministic text-feature scoring",
     }
 
     return make_artifact(

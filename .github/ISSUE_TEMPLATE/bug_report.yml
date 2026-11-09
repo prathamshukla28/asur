@@ -10,7 +10,7 @@ body:
         sections below so we can reproduce and fix the issue quickly.
 
         > Before filing, please confirm the bug is not an intended consequence
-        > of one of ASUR's invariants (see `AGENTS.md`).
+        > of one of ASUR's invariants (see `docs/spec/SPEC.md`).
   - type: textarea
     id: what-happened
     attributes:
@@ -80,7 +80,7 @@ body:
     attributes:
       label: Confirmation
       options:
-        - label: I have read `AGENTS.md` and this is not expected invariant behavior.
+        - label: I have read `docs/spec/SPEC.md` and this is not expected invariant behavior.
           required: true
         - label: This bug does not involve pasting secrets, keys, or private data.
           required: true

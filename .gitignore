@@ -51,12 +51,20 @@ youtube/
 .serena/
 /user.email
 /user.name
-archive/user.email
-archive/user.name
-archive/stray-*/
 
 # Generated / large media (never commit binaries to history)
 studio/lyric_video/project/
 lyric_video/project/
-.life_mentor/
-.weekly_tracker/
+
+# Generated documents / binaries kept locally, not in the repo
+*.pdf
+docs/PROJECT_AND_INTERVIEW.md
+
+# AI-assistant scaffolding (local tool config, not project source)
+/AGENTS.md
+/opencode.json
+.claude/
+CLAUDE.md
+
+# Stray local files moved out of this repo
+/archive/

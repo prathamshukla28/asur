@@ -4,9 +4,9 @@ Thank you for your interest in contributing to ASUR. This document describes how
 set up a development environment, run the test suite, and submit changes that respect
 the project's governing constraints.
 
-> **Read `AGENTS.md` first.** It is the ASUR Constitution and the supreme law of this
-> repository. Every contribution must respect its eight invariants. Where this guide
-> and `AGENTS.md` appear to disagree, `AGENTS.md` wins.
+> **Read [`docs/spec/SPEC.md`](docs/spec/SPEC.md) first.** Every contribution must
+> respect ASUR's eight invariants (local-first, honest evaluation, firewall, fail
+> closed, human gates, provenance, explainability, versioning).
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ the project's governing constraints.
 ## Core Principles
 
 ASUR is a **local-first, key-free** AI content-creation OS. Before writing code, keep
-these invariants (from `AGENTS.md`) in mind:
+these invariants (from `docs/spec/SPEC.md`) in mind:
 
 - **ASUR-LOCAL-01** — The core runs 100% locally with no network calls and no API keys.
   The core package depends on the Python standard library only. Heavy media dependencies
@@ -31,7 +31,7 @@ these invariants (from `AGENTS.md`) in mind:
 - **ASUR-HONEST-01** — Never emit a single "percent viral" number.
 - **ASUR-HUMAN-01** — Humans own all inputs, approvals, and history. No machine commits.
 - **ASUR-PROV-01**, **ASUR-GATE-01**, **ASUR-EXPLAIN-01**, **ASUR-VERSION-01** — see
-  `AGENTS.md` for full definitions.
+  `docs/spec/SPEC.md` for full definitions.
 
 ## Development Setup
 
@@ -95,7 +95,7 @@ code type-clean regardless.
 
 ## Commit Conventions
 
-ASUR uses a phase-scoped conventional commit style (see `AGENTS.md` §10):
+ASUR uses a phase-scoped conventional commit style :
 
 ```
 <type>(pNN): <summary>
@@ -122,14 +122,14 @@ automated attribution to commit messages.
 2. Make focused changes. Keep each PR scoped to one logical concern.
 3. Ensure `ruff check .` passes and `pytest -q` is green.
 4. Fill out the pull request template honestly, including how you tested.
-5. Confirm your change preserves every invariant in `AGENTS.md`.
+5. Confirm your change preserves every invariant in `docs/spec/SPEC.md`.
 
 All PRs run through CI (`stdlib-firewall` and `lint-type-test` jobs). Both must pass
 before review.
 
 ## What You Must Not Do
 
-Per `AGENTS.md`, contributions must never:
+Per `docs/spec/SPEC.md`, contributions must never:
 
 - Add network calls, API keys, or cloud/paid services to the core.
 - Introduce third-party runtime dependencies into the stdlib-only core.

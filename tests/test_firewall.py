@@ -265,31 +265,19 @@ def test_viral_check_never_imports_generation():
         assert not leaked, f"{mod} imports GENERATION {leaked} (firewall breach)"
 
 
-# -- CI firewall grep guard (regression) ------------------------------------
-
-_CI_WORKFLOW = _PACKAGE_ROOT.parent / ".github" / "workflows" / "ci.yml"
+# -- source-level firewall guard ---------------------------------------------
 
 
-def test_ci_firewall_grep_guard_targets_real_dirs():
-    """ASUR-FIREWALL-01: the CI grep guard must scan the dirs that exist.
-
-    Regression guard for the dead-guard bug: the step used to grep the phantom
-    ``asur/asur/...`` paths (the package root is ``asur/``, not ``asur/asur/``),
-    so grep always exited non-zero, the ``if`` was false, and the guard printed
-    OK while checking nothing. It also omitted the ``quality_floors`` token.
-    """
-    ci_text = _CI_WORKFLOW.read_text(encoding="utf-8")
-
-    # (a) the phantom double path must never reappear.
-    assert "asur/asur/" not in ci_text, "CI greps phantom asur/asur/* paths"
-
-    # (b) the guard must scan the real firewall-relevant dirs.
-    for real_dir in ("asur/generation", "asur/editing", "asur/viral_check"):
-        assert real_dir in ci_text, f"CI guard does not scan {real_dir}"
-
-    # (c) the guard must cover the full VIRAL_FORBIDDEN target set.
-    for token in VIRAL_FORBIDDEN:
-        assert token in ci_text, f"CI guard omits forbidden target name {token!r}"
+def test_no_target_name_appears_in_generation_editing_or_viral_sources():
+    """ASUR-FIREWALL-01: no quality/hardness TARGET name appears in any source file
+    of the generation, editing, or viral-check packages (the author's playbook must
+    not be reachable from the lanes the firewall separates)."""
+    offenders = []
+    for pkg in ("generation", "editing", "viral_check"):
+        for path in sorted((_PACKAGE_ROOT / pkg).rglob("*.py")):
+            text = path.read_text(encoding="utf-8").casefold()
+            offenders += [f"{path.name}:{t}" for t in VIRAL_FORBIDDEN if t in text]
+    assert not offenders, f"forbidden target names in firewalled sources: {offenders}"
 
 
 # -- structural (not repr-grep) conformance over the exact view -------------

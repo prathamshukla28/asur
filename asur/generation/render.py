@@ -55,6 +55,8 @@ def build_final_render(
     platform: str | None = None,
     out_root: str,
     assets: Mapping[str, Any] | None = None,
+    narration: Mapping[str, Any] | None = None,
+    out_name: str = "final-video.mp4",
     identity: Identity | None = None,
 ) -> Artifact:
     """Render an approved edit plan to a real MP4 and record a ``render`` artifact.
@@ -69,6 +71,10 @@ def build_final_render(
     (SPEC-GAP G27), and the render body records which asset files were wired.
     ``assets=None`` forwards nothing and stays byte-identical to the P10 render
     (ASUR-VERSION-01).
+
+    ``narration`` is the result block of ``adapters.system_tts.synthesize_narration``
+    (or any voice adapter); when given, its provenance + license are recorded on
+    the render. ``out_name`` names the output file (default ``final-video.mp4``).
 
     Raises ``RenderError`` if verification reports ``fail`` (ASUR-GATE-01).
     """
@@ -93,7 +99,7 @@ def build_final_render(
 
     out_dir = Path(out_root)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "final-video.mp4"
+    out_path = out_dir / out_name
 
     adapter_result = ffmpeg.render(timeline, str(out_path), **adapter_kwargs)
 
@@ -123,6 +129,12 @@ def build_final_render(
             "ffprobe, degrading to skipped offline (G10)"
         ),
     }
+    if narration is not None:
+        # Provenance + license of the synthesized voice track (ASUR-PROV-01).
+        body["narration"] = {
+            "provenance": dict(narration.get("provenance") or {}),
+            "license": dict(narration.get("license") or {}),
+        }
     if assets is not None:
         body["assets"] = {
             "backgrounds": sorted((backgrounds or {}).keys()),

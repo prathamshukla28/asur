@@ -45,6 +45,7 @@ def build_strategy(
     action = _idea_field(idea_artifact, "action", "save")
     language = (idea_artifact.body or {}).get("language", "en")
 
+    takeaway = (idea_artifact.body or {}).get("creator_takeaway")
     awareness = (audience_artifact.body or {}).get("awareness_level") or {}
     awareness_value = awareness.get("value", "problem-aware")
 
@@ -62,7 +63,7 @@ def build_strategy(
             "value": "vertical 9:16 short, single clear idea",
             "how_derived": "locked platform decision (Instagram Reels first)",
         },
-        "platform": DEFAULT_PLATFORM,
+        "platform": (idea_artifact.body or {}).get("platform") or DEFAULT_PLATFORM,
         "emotion": {
             "value": emotion,
             "how_derived": "carried from the idea's dominant emotion cue",
@@ -72,10 +73,19 @@ def build_strategy(
             "that actually matters.",
             "how_derived": "single-promise rule for short-form retention",
         },
-        "value_prop": {
-            "value": f"A clear, honest, quick take on {subject} you can act on.",
-            "how_derived": "audience desires (clarity + usefulness + trust)",
-        },
+        "value_prop": (
+            {
+                "value": takeaway,
+                "how_derived": "creator-supplied takeaway (idea.creator_takeaway)",
+                "source": "creator",
+            }
+            if takeaway
+            else {
+                "value": f"A clear, honest, quick take on {subject} you can act on.",
+                "how_derived": "generic template placeholder - no creator takeaway given",
+                "source": "template-generic",
+            }
+        ),
         "narrative_structure": {
             "value": "hook -> problem -> context -> story -> value -> proof -> "
             "payoff -> cta",
@@ -90,6 +100,7 @@ def build_strategy(
             "how_derived": "platform signals favor watch time + sends (ASUR-HONEST-01)",
         },
         "language": language,
+        "generator": "template",
     }
 
     return make_artifact(
