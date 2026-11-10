@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Dead air in narrated renders, the root cause of the README demo's
+  `long_silence` hold. Scenes were sized from the script's 2.5 words/s
+  estimate. The system voice speaks faster, and each line was padded out to its
+  planned scene, which left up to 2.7 s of silence per scene (16.9 s in a
+  53.6 s video). Now `asur run` / `asur generate` synthesize the narration
+  before the hero proof. Each line is trimmed of engine silence
+  (`silenceremove`) and measured with ffprobe, and a new `edit_plan` version is
+  timed from those measurements: speech + 0.3 s, no shorter than the
+  on-screen caption's reading time at 3.3 words/s, a 1.0 s minimum, and
+  unnarrated beats capped at 1.5 s (`asur/editing/narration_timing.py`). The
+  measurements are recorded in `edit_plan.body.timing`, so `verify-repro`
+  still rebuilds it byte-for-byte. The silence threshold and the gate are
+  unchanged. On the demo, silence dropped to 1.5 s, Retention went from 87 to
+  99, the verdict became PASS, and the gate reached PUBLISH_READY.
+
 ### Added
 - `ASUR_FFMPEG` / `ASUR_FFPROBE` environment overrides (`asur/core/binaries.py`):
   every ffmpeg/ffprobe call (render, narration, viral-check probe, hero proof)
@@ -22,8 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic (byte-identical MP4 across runs), and the motion is recorded in
   render `provenance.motion`. On the README demo the measured viral check went
   from Attention 27 / Retention 7 (frozen_ratio 1.00) to 77 / 87 (frozen_ratio
-  0.00). The gate still holds, on a real 2.7 s silent gap. See
-  `docs/demo/viral-check.md`.
+  0.00). See `docs/demo/viral-check.md`.
 - The package thumbnail is grabbed at the settled hook frame (1.6 s) instead of
   t=0, so it shows the revealed caption.
 - Provenance+license schema guard (`asur/generation/provenance.py`), wired into

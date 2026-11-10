@@ -11,7 +11,7 @@ a viral check measured from the rendered file → a fail-closed publish gate.**
   <img src="docs/demo/demo.gif" width="270" alt="First 15 seconds of the rendered demo: animated gradient cards, a progress bar, and captions that reveal line by line">
 </p>
 
-<sub>First 15 s of <a href="docs/demo/demo.mp4"><code>docs/demo/demo.mp4</code></a>, rendered unedited by the <code>asur run ... --self-approve</code> command below, using ffmpeg 7.1 from <code>pip install imageio-ffmpeg==0.6.0</code> (via <code>ASUR_FFMPEG</code>). Voice: macOS <code>say</code>, whose system voices are licensed for personal, non-commercial use only; this is a non-commercial portfolio demo. Converted to GIF with ffmpeg at 360 px and 12 fps. The <a href="docs/demo/viral-check.md">viral check of that file</a> held the gate.</sub>
+<sub>First 15 s of <a href="docs/demo/demo.mp4"><code>docs/demo/demo.mp4</code></a>, rendered unedited by the <code>asur run ... --self-approve</code> command below, using ffmpeg 7.1 from <code>pip install imageio-ffmpeg==0.6.0</code> (via <code>ASUR_FFMPEG</code>). Voice: macOS <code>say</code>, whose system voices are licensed for personal, non-commercial use only; this is a non-commercial portfolio demo. Converted to GIF with ffmpeg at 360 px and 12 fps. The <a href="docs/demo/viral-check.md">viral check of that file</a> passed, and the gate reached PUBLISH_READY.</sub>
 
 The core is Python standard library only. Rendering uses the `ffmpeg` binary.
 Narration uses your OS speech engine (macOS `say` or `espeak-ng`) when one is
@@ -67,39 +67,46 @@ What you get in `/tmp/asur-demo`:
 | `.asur/runs/run-1.jsonl` | The state-machine log (every gate, disposition and approval) |
 
 Real result on the author's machine: macOS; ffmpeg 7.1 from imageio-ffmpeg via
-`ASUR_FFMPEG`; Homebrew ffprobe 9.0.2; template generator; about 41 s; exit code
-1, meaning held. The full report is in
+`ASUR_FFMPEG`; Homebrew ffprobe 9.0.2; template generator; about 30 s; exit
+code 0. The full report is in
 [`docs/demo/viral-check.md`](docs/demo/viral-check.md).
 
 ```
-[->] FULL_GENERATION              full render 1080x1920 53.6s audio=True
+  narration timing: scenes fitted to measured speech (53.6s planned -> 40.7s)
+[->] HERO_PROOF_READY             hero proof (hook scene rendered + ffprobe-verified)
+[->] HERO_PROOF_APPROVED          HUMAN gate #1: approve hero proof
+[->] FULL_GENERATION              full render 1080x1920 40.7s audio=True
 [->] QA                           QA on the rendered file
-  verdict  : PASS-WITH-CHANGES  (verdict covers the 4 measured dimension(s) and risk flags only)
-    Attention            77   Retention            87   Visual Quality      100   Platform Fit   93
+  verdict  : PASS  (verdict covers the 4 measured dimension(s) and risk flags only)
+    Attention            77   Retention            99   Visual Quality      100   Platform Fit   93
     Satisfaction, Value, Shareability, Saveability, Replayability, Originality,
     Authenticity, Audience Fit: unknown (not measurable from a file)
-    soft  RISK: 2.7s silent gap -> dead air invites a swipe
 [->] VIRAL_CHECK_APPROVED         viral check over the rendered bytes
-[HOLD] PUBLISH_READY              HUMAN gate #2: publish checks
-        [HOLD] viral_check_completed: viral check PASS-WITH-CHANGES: fix ['long_silence'] before publishing
+[->] PUBLISH_READY                HUMAN gate #2: publish checks
 ```
 
-So the run **holds at the publish gate**, which is the correct outcome. The
-template narration leaves a 2.7 s silent gap, and the checker measures it in the
-file. The previous renderer drew static colour cards, and with Homebrew's
-drawtext-less ffmpeg it scored Attention 27 and Retention 7, with
-frozen_ratio 1.00 and no captions. The current default render uses only ffmpeg
-filters:
+The gate passes on measurements, not on a relaxed threshold. Each step below
+removed a real defect that the checker had measured in the file:
 
-- a slowly rotating gradient background, alternating dark and bright cards
-- a whole-video progress bar
-- captions that reveal line by line
-- a 0.12 s `xfade` between scenes
+- **Static cards, captions missing.** The first renderer drew static colour
+  cards, and Homebrew's ffmpeg has no `drawtext`. Result: Attention 27,
+  Retention 7, frozen_ratio 1.00, no captions.
+- **Animated render.** The default render now uses only ffmpeg filters: a
+  rotating gradient background with dark and bright cards alternating, a
+  whole-video progress bar, captions revealed line by line, and a 0.12 s
+  `xfade` between scenes. It is deterministic. Result: frozen_ratio 0.00 and
+  captions on screen, but the gate still held on a 2.7 s silent gap.
+- **Measured narration timing.** The gap came from scene timing. Scenes were
+  sized from a 2.5 words/s estimate, and the faster real speech was padded out
+  to fill them, leaving dead air at the end of every scene (16.9 s in all). Now
+  each line is synthesized first, trimmed, and measured with ffprobe. Each
+  scene lasts as long as its speech plus 0.3 s, but never less than the time
+  needed to read its caption. Result: total silence 1.5 s, no risk flags,
+  verdict PASS.
 
-It is deterministic: two runs produce byte-identical MP4s. The checker measures
-the motion directly, with frozen_ratio 0.00 and 7.84 scene changes/min. Real AI
-backgrounds (SDXL via `asur[generation]`, with a Ken Burns zoom) are the next
-step up.
+PUBLISH_READY only means the checks passed. ASUR never uploads. The `say`
+voice licence is still recorded as non-commercial. Real AI backgrounds (SDXL
+via `asur[generation]`, with a Ken Burns zoom) are the next step up.
 
 Without `--self-approve`, the run stops at the first human gate
 (`HERO_PROOF_APPROVED`). You watch `hero-proof.mp4` first, then approve.

@@ -2,10 +2,11 @@
 
 This is the real viral-check output for [`demo.mp4`](demo.mp4) (the same file
 that [`demo.gif`](demo.gif) is cut from). Nothing below was edited by hand: the
-numbers are copied from the `viral_check` artifact that `asur run` wrote.
+numbers are copied from the `viral_check` and `edit_plan` artifacts that
+`asur run` wrote.
 
-- **File:** `final-video.mp4`, 1080x1920, 30 fps, 53.6 s, H.264 + AAC, 5,052,562 bytes
-- **sha256:** `2a9c7b9accd7b4a4b0f32fc131ba04db660d89b61c7ca0308608c7d3c4af8317`
+- **File:** `final-video.mp4`, 1080x1920, 30 fps, 40.7 s, H.264 + AAC, 4,007,900 bytes
+- **sha256:** `fb717f6a9e827555b48dbf870ece83ba2a75450fea035ea3da36dec5db83db9f`
   (`shasum -a 256 docs/demo/demo.mp4` gives the same hash, so this is the file
   that was measured)
 - **Command:**
@@ -17,17 +18,17 @@ numbers are copied from the `viral_check` artifact that `asur run` wrote.
     --self-approve
   ```
   The recorded run used a scratch directory named `asur-demo` as `--project`.
-  Its paths are shown as `<project>` below.
 - **Render and measure:** ffmpeg 7.1 static build from `imageio-ffmpeg==0.6.0`
   (wheel sha256 checked against PyPI, has `drawtext`), set with
   `ASUR_FFMPEG`. Homebrew ffprobe 9.0.2. Generator: offline templates.
 - **Narration:** macOS `say` (system voice). Those voices are licensed for
   personal, non-commercial use, so the publish gate records the voice as
   non-commercial. espeak-ng was not installed.
-- **Run time:** about 41 s wall clock on an Apple-silicon Mac. Exit code 1
-  (HELD).
+- **Run time:** about 30 s wall clock on an Apple-silicon Mac. Exit code 0.
+- **`asur verify-repro`:** every stored planning stage, including the timed
+  `edit_plan`, rebuilt byte-for-byte.
 
-## Verdict: PASS-WITH-CHANGES, so the gate holds
+## Verdict: PASS, so the gate ships
 
 The verdict covers only the 4 measured dimensions and the risk flags. The other
 8 dimensions are `unknown` because a file probe cannot measure them.
@@ -35,62 +36,80 @@ The verdict covers only the 4 measured dimensions and the risk flags. The other
 | Dimension | Score | Components (value x weight, source: measured input) |
 |---|---:|---|
 | Attention | **77** | opening_change 0.60 x 0.5 (measured: 0 cuts in the first 3 s, 0.0 s frozen); opening_not_black 1.00 x 0.2 (measured: 0.0 s black at start); hook_length 0.917 x 0.3 (plan: 13-word hook) |
-| Retention | **87** | captions 1.00 x 0.3 (plan: authored, and burned in); pacing 1.00 x 0.3 (measured: 7.84 scene changes/min); motion 1.00 x 0.2 (measured: frozen_ratio 0.0); speech_continuity 0.371 x 0.2 (measured: 16.85 s of silence) |
+| Retention | **99** | captions 1.00 x 0.3 (plan: authored, and burned in); pacing 1.00 x 0.3 (measured: 8.85 scene changes/min); motion 1.00 x 0.2 (measured: frozen_ratio 0.0); speech_continuity 0.928 x 0.2 (measured: 1.475 s of silence) |
 | Visual Quality | **100** | resolution 1.00 x 0.5 (1080x1920); fps 1.00 x 0.2 (30); not_black 1.00 x 0.3 (0.0 s black) |
-| Platform Fit | **93** | aspect 1.00 x 0.35 (9:16); duration 1.00 x 0.25 (53.6 s, ceiling 180 s); audio 1.00 x 0.2 (mean -20.9 dB); loudness 0.65 x 0.2 (-19.5 LUFS against a -14 target) |
+| Platform Fit | **93** | aspect 1.00 x 0.35 (9:16); duration 1.00 x 0.25 (40.7 s, ceiling 180 s); audio 1.00 x 0.2 (mean -19.7 dB); loudness 0.64 x 0.2 (-19.6 LUFS against a -14 target) |
 | Satisfaction, Value, Shareability, Saveability, Replayability, Originality, Authenticity, Audience Fit | unknown | Not measurable from a file. They need human ratings or real audience data. |
 
-Risk flags:
+Risk flags: none. The longest silent gap is 1.475 s, under the 2.0 s
+`long_silence` threshold. The densest caption runs at 3.27 words/s, under the
+3.5 limit. Loudness is -19.6 LUFS, inside the 6 LU tolerance; it still costs
+Platform Fit points.
 
-- soft `long_silence`: "RISK: 2.7s silent gap -> dead air invites a swipe"
-  (measured 2.726 s)
-
-Publish gate (human gate #2):
+Run output:
 
 ```
-[HOLD] PUBLISH_READY                HUMAN gate #2: publish checks
-      disposition : HOLD (CONTENT_HOLD)
-        [ok  ] final_file_present: <project>/youtube/asur-demo/render/final-video.mp4 present
-        [ok  ] checksum_matches_viral_check: file sha256 matches the measured bundle (sha256:2a9c7b9accd7...)
-        [HOLD] viral_check_completed: viral check PASS-WITH-CHANGES: fix ['long_silence'] before publishing
-        [ok  ] audio_present: audio track muxed
-        [ok  ] duration_within_platform_bounds: 53.6s within upload bounds
-        [ok  ] package_materialized: package at <project>/youtube/asur-demo/package
-        [ok  ] asset_licenses_recorded: licenses recorded; personal/non-commercial only: ['macOS system voice']
-        [ok  ] approval: self-approval explicitly permitted
+  narration timing: scenes fitted to measured speech (53.6s planned -> 40.7s)
+[->] HERO_PROOF_READY             hero proof (hook scene rendered + ffprobe-verified)
+[->] HERO_PROOF_APPROVED          HUMAN gate #1: approve hero proof
+[->] FULL_GENERATION              full render 1080x1920 40.7s audio=True
+[->] QA                           QA on the rendered file
+  verdict  : PASS  (verdict covers the 4 measured dimension(s) and risk flags only)
+[->] VIRAL_CHECK_APPROVED         viral check over the rendered bytes
+[->] PUBLISH_READY                HUMAN gate #2: publish checks
 
-Result: HELD at PUBLISH_READY. Run log: .asur/runs/run-1.jsonl
+Result: PUBLISH_READY. Upload the files in <project>/youtube/asur-demo/package yourself;
+ASUR never posts (ASUR-HUMAN-01).
 ```
 
-The remaining hold is real. The template script's spoken lines are shorter than
-their scenes, so the narration leaves a 2.7 s gap. The fix belongs in the
-script and its timing, not in the checker.
+PUBLISH_READY means the gate checks passed. ASUR never uploads anything. The
+voice licence is recorded as personal and non-commercial only, so this file is
+fine as a portfolio demo but not for commercial posting.
+
+## Scene timing: measured speech instead of an estimate
+
+The script planner sizes scenes at 2.5 words/s. macOS `say` speaks faster than
+that, and the narration used to be padded out to each planned scene. That left
+dead air at the end of every scene: 16.85 s of silence in all, the longest gap
+2.73 s, which set the `long_silence` flag.
+
+Now each spoken line is synthesized first, trimmed of the engine's own
+leading and trailing silence, and measured with ffprobe. Each scene then lasts
+as long as its line plus a 0.3 s pad. Two floors apply: the time needed to read
+the scene's on-screen caption at 3.3 words/s, and a 1.0 s minimum. A scene with
+no narration is capped at 1.5 s.
+
+| Scene | Speech (s) | Planned (s) | Timed (s) |
+|---|---:|---:|---:|
+| hook | 3.895 | 4.8 | 4.2 |
+| opening | 2.809 | 4.4 | 3.2 |
+| problem | 4.362 | 6.4 | 4.7 |
+| context | 2.594 | 3.6 | 2.9 |
+| story | 5.723 | 7.6 | 6.1 |
+| value | 7.138 | 9.6 | 7.5 |
+| proof | 3.836 | 6.0 | 4.2 |
+| payoff | 4.033 | 6.4 | 5.5 (the 18-word caption's reading floor) |
+| cta | 2.035 | 4.8 | 2.4 |
+
+The one remaining 1.475 s silence is the payoff scene. It is held a little
+longer than its spoken line so its 18-word caption stays readable.
 
 ## Before and after: same script, same checker
 
-"Before" is the previous run of the same command. It used Homebrew ffmpeg 9.0.2,
-which has no `drawtext`, and the old renderer, which drew static solid-colour
-cards (sha256 `beef7559bfa7...`).
+| | Static cards (first run) | Animated, planned timing | Animated, measured timing (this file) |
+|---|---:|---:|---:|
+| Attention | 27 | 77 | **77** |
+| Retention | 7 | 87 | **99** |
+| Visual Quality | 97 | 100 | **100** |
+| Platform Fit | 93 | 93 | **93** |
+| duration | 53.6 s | 53.6 s | **40.7 s** |
+| silence total / longest gap | 16.85 s / 2.73 s | 16.85 s / 2.73 s | **1.48 s / 1.48 s** |
+| frozen_ratio | 1.00 | 0.00 | **0.00** |
+| captions burned in | no | yes | **yes** |
+| risk flags | long_silence, static_opening, mostly_static, captions_missing | long_silence | **none** |
+| verdict / gate | PASS-WITH-CHANGES / HOLD | PASS-WITH-CHANGES / HOLD | **PASS / SHIP** |
 
-| | Before | After |
-|---|---:|---:|
-| Attention | 27 | **77** |
-| Retention | 7 | **87** |
-| Visual Quality | 97 | **100** |
-| Platform Fit | 93 | 93 |
-| frozen_ratio (freezedetect) | 1.00 | **0.00** |
-| scene changes/min (scdet) | 0.0 | **7.84** (7 of the 8 scene boundaries detected) |
-| black at start (blackdetect) | 4.8 s (the dark first card read as black) | **0.0 s** |
-| captions burned in | no (no drawtext) | **yes** |
-| soft risk flags | long_silence, static_opening, mostly_static, captions_missing | long_silence |
-| verdict / gate | PASS-WITH-CHANGES / HOLD | PASS-WITH-CHANGES / HOLD |
-
-Re-measuring both files with both ffmpeg builds (9.0.2 and 7.1) gives
-identical probe numbers. The improvement comes from the pixels, not from a
-different measuring tool.
-
-What changed in the render (all pure ffmpeg filters, deterministic: two runs
-produced byte-identical MP4s):
+What the render does (all pure ffmpeg filters, deterministic):
 
 - the background is a slowly rotating two-colour gradient (`gradients`), with
   cards alternating dark and bright so each scene change is a real visual change
