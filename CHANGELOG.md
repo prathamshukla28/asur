@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `ASUR_FFMPEG` / `ASUR_FFPROBE` environment overrides (`asur/core/binaries.py`):
+  every ffmpeg/ffprobe call (render, narration, viral-check probe, hero proof)
+  resolves its binary in one place. That lets a drawtext-capable static build
+  (for example the ffmpeg that `pip install imageio-ffmpeg` ships) render
+  captions without touching the system install. A bad override fails closed
+  and never falls back to `PATH`. `ASUR_FONTFILE` picks the caption font.
+- The default render is animated, using only ffmpeg filters with no new
+  dependency: rotating gradient cards that alternate dark and bright, a
+  whole-video progress bar, word-wrapped captions with a staggered per-line
+  fade and slide, `xfade` slide-up transitions (`transition_s=0` gives hard
+  cuts), and a Ken Burns zoom on produced background images. It is
+  deterministic (byte-identical MP4 across runs), and the motion is recorded in
+  render `provenance.motion`. On the README demo the measured viral check went
+  from Attention 27 / Retention 7 (frozen_ratio 1.00) to 77 / 87 (frozen_ratio
+  0.00). The gate still holds, on a real 2.7 s silent gap. See
+  `docs/demo/viral-check.md`.
+- The package thumbnail is grabbed at the settled hook frame (1.6 s) instead of
+  t=0, so it shows the revealed caption.
 - Provenance+license schema guard (`asur/generation/provenance.py`), wired into
   `produce_assets`: every produced asset must carry a complete, structurally
   valid provenance+license block or production fails closed — making ASUR-PROV-01
