@@ -56,7 +56,7 @@ llm = [
 dev = [
     "ruff==0.16.10",
     "mypy==2.4.0",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
 ]
 
 [project.scripts]
