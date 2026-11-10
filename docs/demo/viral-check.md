@@ -46,7 +46,8 @@ Risk flags: none. The longest silent gap is 1.475 s, under the 2.0 s
 3.5 limit. Loudness is -19.6 LUFS, inside the 6 LU tolerance; it still costs
 Platform Fit points.
 
-Run output:
+Run output (abridged: the SCRIPT and PLAN stages and the per-dimension lines,
+which are in the table above, are cut):
 
 ```
   narration timing: scenes fitted to measured speech (53.6s planned -> 40.7s)

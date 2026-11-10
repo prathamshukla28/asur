@@ -62,7 +62,7 @@ What you get in `/tmp/asur-demo`:
 |---|---|
 | `youtube/asur-demo/render/final-video.mp4` | The rendered 1080x1920 video (animated FFmpeg gradient cards, burned-in captions, system-voice narration) |
 | `youtube/asur-demo/render/hero-proof.mp4` | The hook scene, rendered and ffprobe-verified before the full render |
-| `youtube/asur-demo/package/` | Ready-to-upload set: video, thumbnail, title, description, tags, metadata, content report |
+| `youtube/asur-demo/package/` | Upload set: video, thumbnail, title, description, tags, metadata, content report. Title and description default to the subject line, and `tags.txt` is written empty for you to fill: ASUR invents no hashtags. |
 | `.script/artifacts/<kind>/` | The artifact trail (15 kinds): idea → research → audience → strategy → hooks → script → qa_report → plans → edit_plan → render → viral_check → publish_package. Every artifact is versioned and checksummed, with lineage. |
 | `.asur/runs/run-1.jsonl` | The state-machine log (every gate, disposition and approval) |
 
@@ -70,6 +70,8 @@ Real result on the author's machine: macOS; ffmpeg 7.1 from imageio-ffmpeg via
 `ASUR_FFMPEG`; Homebrew ffprobe 9.0.2; template generator; about 30 s; exit
 code 0. The full report is in
 [`docs/demo/viral-check.md`](docs/demo/viral-check.md).
+Output (abridged: the SCRIPT and PLAN stages are cut, and the per-dimension
+score lines are condensed):
 
 ```
   narration timing: scenes fitted to measured speech (53.6s planned -> 40.7s)

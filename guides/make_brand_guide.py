@@ -267,7 +267,7 @@ def build(out_path: Path):
     h2("What changed since version 1 of this guide")
     table([
         ["Folders", ("The project was reorganized. Side tools moved to <b>studio/</b>, PDFs to "
-         "<b>guides/</b>, old output videos to <b>outputs/</b>, personal notes to <b>archive/</b>. "
+         "<b>guides/</b>, old output videos to <b>outputs/</b>; personal notes left the repo. "
          "Nothing was deleted.")],
         ["YouTube folder", ("Now really exists: <b>asur/youtube/demo/</b> was produced by a real "
          "<font name='Courier'>asur render</font> run (final video, thumbnail, title, description, "
@@ -480,8 +480,6 @@ def build(out_path: Path):
         ["guides/", "These PDFs and the scripts that generate them (v1 kept)."],
         ["youtube/", "Upload-ready packages per project (made by asur render). Not in git."],
         ["outputs/", "Old output videos: edit_out/ (6 edit styles) and render_out/ (demo reel)."],
-        ["archive/", ("Kept but out of the way: SENIORITY_NOTES.md, the two stray 1-byte files "
-         "user.email and user.name.")],
         ["scripts/", "com.asur.daily.plist &mdash; macOS schedule for the daily self-check."],
         [".script/", "The artifact store (every stage's JSON, versioned). Not in git."],
         [".github/", "CI: tests, lint, and a stdlib-only import probe on every push."],

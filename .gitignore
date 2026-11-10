@@ -4,7 +4,8 @@ __pycache__/
 *$py.class
 *.egg-info/
 .eggs/
-/build/          # setuptools build dir (root only — NOT docs/build/, which is source)
+# setuptools build dir (root only — NOT docs/build/, which is source)
+/build/
 /dist/
 *.egg
 
@@ -65,6 +66,3 @@ docs/PROJECT_AND_INTERVIEW.md
 /opencode.json
 .claude/
 CLAUDE.md
-
-# Stray local files moved out of this repo
-/archive/
