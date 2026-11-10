@@ -124,6 +124,15 @@ def _rebuild(
             asset_plan, project_id, visual_screenplay_artifact=screenplay
         )
     if kind == "edit_plan" and gen_plan is not None and screenplay is not None:
+        timing = (stored["edit_plan"].body or {}).get("timing") or {}
+        if timing.get("source") == "measured_narration":
+            # Timed from measured speech: rebuild from the upstream plan plus the
+            # recorded measurements (the speech itself is engine output).
+            from ..editing.narration_timing import timed_edit_plan
+            return timed_edit_plan(
+                gen_plan, screenplay, project_id, list(timing.get("speech_s") or []),
+                engine=str(timing.get("engine", "")),
+            )
         from ..editing.timeline import (
             build_edit_plan,
             build_timeline_from_generation_plan,

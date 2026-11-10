@@ -132,6 +132,15 @@ def _resolve_project(args: argparse.Namespace) -> tuple[Path, str] | int:
     return project_root, _derive_project_id(project_root, args.project_id)
 
 
+def _emit_narration_timing(edit_plan, voice_note: str | None) -> None:
+    timing = (edit_plan.body or {}).get("timing") or {}
+    if timing:
+        _emit(f"  narration timing: scenes fitted to measured speech "
+              f"({timing.get('planned_total_s')}s planned -> {timing.get('total_s')}s)")
+    elif voice_note:
+        _emit(f"  narration timing: planned (no measured voice: {voice_note})")
+
+
 def _render_dir(project_root: Path, project_id: str) -> Path:
     return MediaWorkspace(project_root, project_id).ensure().base / "render"
 
@@ -168,11 +177,15 @@ def _run_generate(args: argparse.Namespace) -> int:
     plan = pipeline.build_plan(ws, strategy, script, identity=identity)
     for kind, art in plan.items():
         _emit(f"  {kind:<18} {art.artifact_id}")
+    render_dir = _render_dir(project_root, project_id)
+    plan, narration, voice_note = pipeline.narrate_and_time(
+        ws, plan, out_dir=render_dir, voice=not args.no_voice, identity=identity)
+    _emit_narration_timing(plan["edit_plan"], voice_note)
     try:
         render, note = pipeline.render_final(
             ws, plan["edit_plan"], plan["visual_screenplay"], platform=args.platform,
-            out_dir=_render_dir(project_root, project_id), voice=not args.no_voice,
-            identity=identity,
+            out_dir=render_dir, voice=not args.no_voice, identity=identity,
+            narration=narration, voice_note=voice_note,
         )
     except RenderError as exc:
         _emit(f"  disposition : {HOLD} (RENDER_UNAVAILABLE) {exc}")
@@ -334,6 +347,9 @@ def _run_run(args: argparse.Namespace) -> int:
             f"{len(scenes)} timed scenes", "screenplay has untimed scenes"))],
                 "screenplay"):
         return 1
+    plan, narration, voice_note = pipeline.narrate_and_time(
+        ws, plan, out_dir=render_dir, voice=not args.no_voice, identity=identity)
+    _emit_narration_timing(plan["edit_plan"], voice_note)
     try:
         hero = pipeline.render_hero_proof(plan["edit_plan"], platform=args.platform, out_dir=render_dir)
     except RenderError as exc:
@@ -352,7 +368,8 @@ def _run_run(args: argparse.Namespace) -> int:
     try:
         render, note = pipeline.render_final(ws, plan["edit_plan"], plan["visual_screenplay"],
                                              platform=args.platform, out_dir=render_dir,
-                                             voice=not args.no_voice, identity=identity)
+                                             voice=not args.no_voice, identity=identity,
+                                             narration=narration, voice_note=voice_note)
     except RenderError as exc:
         render, note = None, str(exc)
     if render is None:

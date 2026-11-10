@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ...core.binaries import ffmpeg_bin, ffmpeg_path, ffprobe_bin, ffprobe_path
 
@@ -65,16 +65,44 @@ def _speak(engine: str, text: str, out: Path, rate_wpm: int) -> None:
         _run([engine, "-s", str(rate_wpm), "-w", str(out), "--", text])
 
 
+# Speech clips are trimmed of leading/trailing silence quieter than this before
+# they are measured, so a scene is timed to the words, not to the engine's own
+# padding. -60 dBFS sits below the viral check's -50 dB silence floor.
+TRIM_THRESHOLD_DB = -60
+# Leave this much air at the end of a clip when it has to be sped up to fit.
+_FIT_AIR_S = 0.15
+
+
+def _is_spoken(text: str) -> bool:
+    return bool(text) and not text.startswith("(none")
+
+
+def _trim_filter() -> str:
+    """Strip leading and trailing silence (reverse trick: silenceremove only trims a start)."""
+    trim = (f"silenceremove=start_periods=1:start_duration=0.02"
+            f":start_threshold={TRIM_THRESHOLD_DB}dB")
+    return f"{trim},areverse,{trim},areverse"
+
+
 def synthesize_narration(
     segments: list[dict[str, Any]],
     out_path: str | Path,
     *,
     rate_wpm: int = DEFAULT_RATE_WPM,
+    fit_durations: Callable[[list[float | None]], list[float]] | None = None,
 ) -> dict[str, Any]:
-    """Write one narration WAV whose segment i spans exactly segments[i] duration.
+    """Write one narration WAV: segment i is speech for line i, padded to scene i.
 
     ``segments`` is a list of ``{"start": s, "end": e, "text": str}`` in timeline
     order. Empty text (or a "(none ...)" visual beat) becomes silence.
+
+    Each spoken line is synthesized, trimmed of leading/trailing silence and
+    MEASURED (ffprobe). By default every segment is then padded to its PLANNED
+    span (``end - start``), sped up (max 1.6x) only if the speech runs long.
+    With ``fit_durations``, the scene lengths come from the measurements
+    instead: it receives one measured speech length per segment (``None`` for
+    an unspoken beat) and returns the duration to pad each segment to. That is
+    how a scene stops being longer than its line (dead air the viewer hears).
     """
     engine = available_engine()
     if engine is None:
@@ -84,22 +112,36 @@ def synthesize_narration(
     fitted = 0
     with tempfile.TemporaryDirectory(prefix="asur_tts_") as tmp:
         work = Path(tmp)
-        parts: list[Path] = []
+        speech: list[Path | None] = []
+        speech_s: list[float | None] = []
         for i, seg in enumerate(segments):
-            dur = max(0.1, float(seg["end"]) - float(seg["start"]))
             text = " ".join(str(seg.get("text", "")).split())
+            if not _is_spoken(text):
+                speech.append(None)
+                speech_s.append(None)
+                continue
+            raw = work / f"raw_{i:03d}.{'aiff' if engine == 'say' else 'wav'}"
+            _speak(engine, text, raw, rate_wpm)
+            trimmed = work / f"speech_{i:03d}.wav"
+            _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(raw), "-af",
+                  _trim_filter(), "-ar", str(SAMPLE_RATE), "-ac", "1", str(trimmed)])
+            speech.append(trimmed)
+            speech_s.append(round(_duration(trimmed), 3))
+        planned = [max(0.1, float(seg["end"]) - float(seg["start"])) for seg in segments]
+        durations = list(fit_durations(speech_s)) if fit_durations else planned
+        if len(durations) != len(segments):
+            raise ValueError("fit_durations must return one duration per segment")
+        parts: list[Path] = []
+        for i, (clip, dur) in enumerate(zip(speech, durations)):
             part = work / f"part_{i:03d}.wav"
-            if not text or text.startswith("(none"):
+            if clip is None:
                 _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
                       f"anullsrc=r={SAMPLE_RATE}:cl=mono", "-t", f"{dur:.3f}", str(part)])
             else:
-                raw = work / f"raw_{i:03d}.{'aiff' if engine == 'say' else 'wav'}"
-                _speak(engine, text, raw, rate_wpm)
-                spoken = _duration(raw)
-                # Leave 0.15s of air at the cut; speed up (max 1.6x) only if needed.
-                tempo = min(1.6, max(1.0, spoken / max(0.1, dur - 0.15)))
+                spoken = speech_s[i] or 0.0
+                tempo = min(1.6, max(1.0, spoken / max(0.1, dur - _FIT_AIR_S)))
                 fitted += int(tempo > 1.0)
-                _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(raw), "-af",
+                _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(clip), "-af",
                       f"atempo={tempo:.4f},apad=whole_dur={dur:.3f},atrim=0:{dur:.3f}",
                       "-ar", str(SAMPLE_RATE), "-ac", "1", str(part)])
             parts.append(part)
@@ -117,6 +159,9 @@ def synthesize_narration(
             "rate_wpm": rate_wpm,
             "segments": len(segments),
             "segments_sped_up_to_fit": fitted,
+            "timing": "measured" if fit_durations else "planned",
+            "speech_s": speech_s,
+            "segment_durations_s": [round(d, 3) for d in durations],
             "duration_s": round(_duration(out), 3),
             "render_cost_usd": 0,
         },

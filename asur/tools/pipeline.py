@@ -40,6 +40,7 @@ __all__ = [
     "build_plan",
     "build_script_chain",
     "file_sha256",
+    "narrate_and_time",
     "publish_checks",
     "qa_checks",
     "render_hero_proof",
@@ -142,6 +143,50 @@ def render_hero_proof(edit_plan: Artifact, *, platform: str, out_dir: Path) -> d
     return {"path": str(out), "verify": verify_render(out, platform=platform)}
 
 
+def narrate_and_time(
+    ws: Workspace,
+    plan: dict[str, Artifact],
+    *,
+    out_dir: Path,
+    voice: bool = True,
+    identity: Identity | None = None,
+) -> tuple[dict[str, Artifact], dict[str, Any] | None, str | None]:
+    """Synthesize the narration and time every scene from the MEASURED speech.
+
+    The planned scene lengths come from a words-per-second estimate; real speech
+    is faster, and padding it to the estimate leaves dead air in every scene.
+    So the narration is synthesized first, each line is trimmed and measured
+    (ffprobe), and a new ``edit_plan`` version is built whose scenes last as long
+    as their speech plus a bounded pad (``asur.editing.narration_timing``). The
+    hero proof and the full render then use that plan, so picture, captions and
+    voice line up.
+
+    Returns ``(plan, narration, note)``. Without a voice (disabled, or no speech
+    engine) the plan is returned unchanged with a note explaining the silence.
+    """
+    from ..editing.narration_timing import fit_scene_durations, timed_edit_plan
+    from ..generation.adapters.system_tts import TTSUnavailable, synthesize_narration
+
+    if not voice:
+        return plan, None, "silent render: voice disabled (--no-voice)"
+    screenplay = plan["visual_screenplay"]
+    scenes = list((screenplay.body or {}).get("scenes") or [])
+    try:
+        narration = synthesize_narration(
+            _narration_segments(screenplay), out_dir / "narration.wav",
+            fit_durations=lambda speech: fit_scene_durations(scenes, speech),
+        )
+    except TTSUnavailable as exc:
+        return plan, None, f"silent render: {exc}"
+    prov = narration.get("provenance") or {}
+    edit_plan = timed_edit_plan(
+        plan["generation_plan"], screenplay, ws.project_id, list(prov.get("speech_s") or []),
+        engine=str(prov.get("model", "")), identity=identity,
+    )
+    ws.save_artifact(edit_plan)
+    return {**plan, "edit_plan": edit_plan}, narration, None
+
+
 def render_final(
     ws: Workspace,
     edit_plan: Artifact,
@@ -151,24 +196,29 @@ def render_final(
     out_dir: Path,
     voice: bool = True,
     identity: Identity | None = None,
+    narration: dict[str, Any] | None = None,
+    voice_note: str | None = None,
 ) -> tuple[Artifact, str | None]:
-    """Narrate (if a system voice exists) and render the full edit plan.
+    """Render the full edit plan, narrated if a voice is available.
 
-    Returns ``(render_artifact, voice_note)``; voice_note explains a silent render.
+    Pass ``narration`` (from ``narrate_and_time``) to reuse a narration that the
+    edit plan was already timed to; otherwise the narration is synthesized here
+    against the planned scene lengths. Returns ``(render_artifact, voice_note)``;
+    voice_note explains a silent render.
     """
     from ..generation.adapters.system_tts import TTSUnavailable, synthesize_narration
     from ..generation.render import build_final_render
 
-    narration: dict[str, Any] | None = None
-    note: str | None = None
-    if voice:
-        try:
-            narration = synthesize_narration(_narration_segments(screenplay),
-                                             out_dir / "narration.wav")
-        except TTSUnavailable as exc:
-            note = f"silent render: {exc}"
-    else:
-        note = "silent render: voice disabled (--no-voice)"
+    note: str | None = voice_note
+    if narration is None and note is None:
+        if voice:
+            try:
+                narration = synthesize_narration(_narration_segments(screenplay),
+                                                 out_dir / "narration.wav")
+            except TTSUnavailable as exc:
+                note = f"silent render: {exc}"
+        else:
+            note = "silent render: voice disabled (--no-voice)"
     render = build_final_render(
         edit_plan, ws.project_id, platform=platform, out_root=str(out_dir),
         assets={"voice": narration["file_path"]} if narration else None,
