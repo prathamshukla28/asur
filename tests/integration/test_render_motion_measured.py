@@ -54,3 +54,24 @@ def test_transitions_keep_the_timeline_length(measured, mode):
 def test_scene_changes_are_measurable(measured):
     assert measured["cut"]["scene_changes_total"] >= 2
     assert measured["xfade"]["scene_changes_total"] >= 1
+
+
+def test_xfade_failure_falls_back_to_trimmed_hard_cuts(tmp_path, monkeypatch):
+    """A failed xfade pass still yields a timeline-length file, with the reason recorded."""
+    if not probe.tools_available():
+        pytest.skip("ffprobe not available")
+
+    def broken_join(*args, **kwargs):
+        raise ffmpeg.RenderError("ffmpeg xfade join failed (killed by SIGKILL):\n(no stderr output)")
+
+    monkeypatch.setattr(ffmpeg, "_xfade_join", broken_join)
+    path = tmp_path / "fallback.mp4"
+    with pytest.warns(RuntimeWarning, match="hard cuts"):
+        result = ffmpeg.render(TIMELINE, str(path))
+    facts = probe.measure_video(path)
+    assert facts["duration_s"] == pytest.approx(9.0, abs=0.1)
+    assert facts["scene_changes_total"] >= 2
+    transition = result["provenance"]["motion"]["transition"]
+    assert transition["type"] == "cut"
+    assert transition["fallback_from"] == ffmpeg._TRANSITION
+    assert "SIGKILL" in transition["fallback_reason"]

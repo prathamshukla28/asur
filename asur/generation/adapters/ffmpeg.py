@@ -31,9 +31,11 @@ same filtergraph. The motion is real pixel change, so the viral check's
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import tempfile
 import textwrap
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -125,6 +127,50 @@ _FONT_CANDIDATES = (
 
 class RenderError(RuntimeError):
     """Raised when the ffmpeg binary is missing or a render command fails."""
+
+
+# Every render call runs ffmpeg with these flags so a failure's stderr holds the
+# actual messages, not thousands of progress lines: ``-nostats`` drops the
+# ``frame= ... speed=`` updates and ``-loglevel warning`` keeps warnings and
+# errors. (A raw ``stderr[-400:]`` used to show only progress, hiding why CI
+# renders failed.)
+_QUIET = ["-hide_banner", "-nostats", "-loglevel", "warning"]
+
+
+def _failure(what: str, proc: Any, *, keep: int = 12) -> str:
+    """Readable failure text: exit status (including a fatal signal) + stderr head/tail.
+
+    A process killed by a signal (for example the kernel's OOM killer sending
+    SIGKILL) prints no error of its own, so the exit status is often the only
+    evidence. Progress lines are dropped; the first and last ``keep`` lines of
+    what remains are kept, so neither the first error nor the final one is lost.
+    """
+    code = getattr(proc, "returncode", None)
+    if isinstance(code, int) and code < 0:
+        try:
+            status = f"killed by {signal.Signals(-code).name}"
+        except ValueError:
+            status = f"killed by signal {-code}"
+    else:
+        status = f"exit code {code}"
+    raw = str(getattr(proc, "stderr", "") or "").replace("\r", "\n")
+    lines = [
+        ln.rstrip()
+        for ln in raw.split("\n")
+        if ln.strip() and not ln.lstrip().startswith(("frame=", "size="))
+    ]
+    if len(lines) > 2 * keep:
+        lines = [*lines[:keep], f"... ({len(lines) - 2 * keep} lines omitted) ...", *lines[-keep:]]
+    detail = "\n".join(ln[:300] for ln in lines) or "(no stderr output)"
+    return f"{what} ({status}):\n{detail}"
+
+
+def _run_ffmpeg(cmd: list[str], *, timeout: float, what: str) -> Any:
+    """``subprocess.run`` for an ffmpeg command; a timeout becomes a ``RenderError``."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise RenderError(f"{what}: timed out after {timeout:.0f}s (fail closed)") from exc
 
 
 def _ffmpeg_available() -> bool:
@@ -424,6 +470,7 @@ def _render_card(
         cmd = [
             ffmpeg_bin(),
             "-y",
+            *_QUIET,
             "-loop",
             "1",
             "-framerate",
@@ -444,6 +491,7 @@ def _render_card(
         cmd = [
             ffmpeg_bin(),
             "-y",
+            *_QUIET,
             "-f",
             "lavfi",
             "-i",
@@ -485,7 +533,7 @@ def _render_card(
         "yuv420p",  # mandatory: yuv444p shows black on phones
         str(out),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
+    proc = _run_ffmpeg(cmd, timeout=300, what=f"ffmpeg card render (scene {index})")
     if caption and proc.returncode != 0 and "No such filter: 'drawtext'" in (proc.stderr or ""):
         # This ffmpeg build has no libfreetype. Render the card without text
         # (KEEPING the background and motion) and record the skip so provenance
@@ -506,7 +554,7 @@ def _render_card(
             tail_s=tail_s,
         )
     if proc.returncode != 0 or not out.is_file():
-        raise RenderError(f"ffmpeg card render failed (scene {index}): {proc.stderr[-400:]}")
+        raise RenderError(_failure(f"ffmpeg card render failed (scene {index})", proc))
     return out
 
 
@@ -563,15 +611,15 @@ def _concat(
         encoding="utf-8",
     )
     inputs, audio_graph, audio_out = _audio_args(1, audio_path, music_path)
-    cmd = [ffmpeg_bin(), "-y", "-f", "concat", "-safe", "0", "-i", str(listing), *inputs]
+    cmd = [ffmpeg_bin(), "-y", *_QUIET, "-f", "concat", "-safe", "0", "-i", str(listing), *inputs]
     if audio_graph:
         cmd += ["-filter_complex", audio_graph, "-map", "0:v"]
     elif audio_out:
         cmd += ["-map", "0:v"]
     cmd += [*_VIDEO_OUT, *audio_out, str(out_path)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
+    proc = _run_ffmpeg(cmd, timeout=300, what="ffmpeg concat")
     if proc.returncode != 0 or not out_path.is_file():
-        raise RenderError(f"ffmpeg concat failed: {proc.stderr[-400:]}")
+        raise RenderError(_failure("ffmpeg concat failed", proc))
 
 
 def _xfade_graph(durations: list[float], *, transition: str, transition_s: float) -> str:
@@ -596,6 +644,39 @@ def _xfade_graph(durations: list[float], *, transition: str, transition_s: float
     return ";".join(parts)
 
 
+def _trimmed_cut_join(
+    cards: list[Path],
+    durations: list[float],
+    out_path: Path,
+    *,
+    audio_path: Path | None = None,
+    music_path: Path | None = None,
+) -> None:
+    """Hard-cut join of xfade-ready cards, each trimmed back to its scene length.
+
+    Cards rendered for ``xfade`` carry a transition tail; ``trim`` drops it so
+    every scene keeps its timeline start and the total length is unchanged. The
+    ``concat`` filter reads its inputs one after another.
+    """
+    cmd = [ffmpeg_bin(), "-y", *_QUIET]
+    for card in cards:
+        cmd += ["-i", str(card)]
+    inputs, audio_graph, audio_out = _audio_args(len(cards), audio_path, music_path)
+    cmd += inputs
+    parts = [
+        f"[{k}:v]trim=duration={dur:.3f},setpts=PTS-STARTPTS[c{k}]"
+        for k, dur in enumerate(durations)
+    ]
+    labels = "".join(f"[c{k}]" for k in range(len(durations)))
+    graph = ";".join(parts) + f";{labels}concat=n={len(durations)}:v=1:a=0[v]"
+    if audio_graph:
+        graph += ";" + audio_graph
+    cmd += ["-filter_complex", graph, "-map", "[v]", *_VIDEO_OUT, *audio_out, str(out_path)]
+    proc = _run_ffmpeg(cmd, timeout=600, what="ffmpeg hard-cut join")
+    if proc.returncode != 0 or not out_path.is_file():
+        raise RenderError(_failure("ffmpeg hard-cut join failed", proc))
+
+
 def _xfade_join(
     cards: list[Path],
     durations: list[float],
@@ -607,7 +688,7 @@ def _xfade_join(
     transition_s: float = _TRANSITION_S,
 ) -> None:
     """Join cards with ``xfade`` transitions and mux audio in one ffmpeg pass."""
-    cmd = [ffmpeg_bin(), "-y"]
+    cmd = [ffmpeg_bin(), "-y", *_QUIET]
     for card in cards:
         cmd += ["-i", str(card)]
     inputs, audio_graph, audio_out = _audio_args(len(cards), audio_path, music_path)
@@ -616,9 +697,9 @@ def _xfade_join(
     if audio_graph:
         graph += ";" + audio_graph
     cmd += ["-filter_complex", graph, "-map", "[v]", *_VIDEO_OUT, *audio_out, str(out_path)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+    proc = _run_ffmpeg(cmd, timeout=600, what="ffmpeg xfade join")
     if proc.returncode != 0 or not out_path.is_file():
-        raise RenderError(f"ffmpeg xfade join failed: {proc.stderr[-400:]}")
+        raise RenderError(_failure("ffmpeg xfade join failed", proc))
 
 
 def render(
@@ -713,9 +794,25 @@ def render(
                 )
             )
             offset += dur
+        xfade_fallback: str | None = None
         if trans > 0:
-            _xfade_join(cards, durations, out, audio_path=voice, music_path=music,
-                        transition_s=trans)
+            try:
+                _xfade_join(cards, durations, out, audio_path=voice, music_path=music,
+                            transition_s=trans)
+            except RenderError as exc:
+                # One ffmpeg pass holding every scene open for the xfade chain
+                # has died on some builds (CI, ffmpeg 8.0.1 amd64v3) with no
+                # error message of its own. Keep the render: join the same
+                # cards with hard cuts, trimmed to the timeline so timing is
+                # unchanged, and record why in provenance (never a silent swap).
+                xfade_fallback = str(exc)
+                warnings.warn(
+                    f"xfade transitions failed; rendered with hard cuts instead: {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                out.unlink(missing_ok=True)
+                _trimmed_cut_join(cards, durations, out, audio_path=voice, music_path=music)
         else:
             _concat(cards, out, work, audio_path=voice, music_path=music)
 
@@ -741,7 +838,9 @@ def render(
             else None
         ),
         "transition": (
-            {"type": _TRANSITION, "duration_s": trans} if trans > 0 else {"type": "cut"}
+            {"type": "cut", "fallback_from": _TRANSITION, "fallback_reason": xfade_fallback}
+            if xfade_fallback is not None
+            else {"type": _TRANSITION, "duration_s": trans} if trans > 0 else {"type": "cut"}
         ),
     }
     return {
@@ -814,6 +913,7 @@ def grab_thumbnail(
     cmd = [
         ffmpeg_bin(),
         "-y",
+        *_QUIET,
         "-ss",
         f"{timestamp_s:.3f}",
         "-i",
@@ -822,9 +922,9 @@ def grab_thumbnail(
         "1",
         str(out),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    proc = _run_ffmpeg(cmd, timeout=120, what="ffmpeg thumbnail grab")
     if proc.returncode != 0 or not out.is_file():
-        raise RenderError(f"ffmpeg thumbnail grab failed: {proc.stderr[-400:]}")
+        raise RenderError(_failure("ffmpeg thumbnail grab failed", proc))
     return {
         "media_type": "image",
         "origin": "ffmpeg-framegrab",
