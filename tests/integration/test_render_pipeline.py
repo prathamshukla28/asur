@@ -9,6 +9,7 @@ while a real-run VIRAL_VIEW still strips quality TARGETS by name
 
 import pytest
 
+from asur.core.binaries import ffmpeg_bin, ffprobe_bin
 from asur.core.identity import get_identity
 from asur.editing.timeline import build_edit_plan, build_timeline_from_generation_plan
 from asur.generation.adapters import ffmpeg
@@ -135,7 +136,7 @@ def _synth_wav(path, *, freq, seconds=2.0):
 
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_bin(),
             "-y",
             "-f",
             "lavfi",
@@ -181,7 +182,7 @@ def test_two_track_mix_muxes_voice_over_ducked_music(chain, tmp_path):
 
     probe = subprocess.run(
         [
-            "ffprobe",
+            ffprobe_bin(),
             "-v",
             "error",
             "-select_streams",

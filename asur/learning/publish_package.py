@@ -273,7 +273,11 @@ def materialize_package(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_jpg = Path(tmpdir) / "thumb.jpg"
-        thumb = _ffmpeg.grab_thumbnail(final_video, str(tmp_jpg), timestamp_s=0.0)
+        # The settled hook frame: captions reveal over the first ~1.5s, so t=0
+        # would be a frame with no text yet.
+        duration = (render_body.get("provenance") or {}).get("duration_s")
+        stamp = _ffmpeg.thumbnail_timestamp(duration if isinstance(duration, (int, float)) else None)
+        thumb = _ffmpeg.grab_thumbnail(final_video, str(tmp_jpg), timestamp_s=stamp)
         files.append(_write_bytes(_PACKAGE_THUMBNAIL, tmp_jpg.read_bytes()))
 
     title = str(pub_body.get("title", ""))

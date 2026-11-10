@@ -10,20 +10,34 @@ message when the ``ffmpeg`` binary is absent (ASUR-GATE-01).
 It is never imported by the stdlib control path. Structural verification of the
 rendered file lives in ``asur.generation.hero_proof.verify_render`` (ffprobe).
 
-Honest scope: with no AI models wired yet, each scene renders as a deterministic
-solid-colour 9:16 card (pure FFmpeg ``color`` source). That proves the pipeline
-writes true pixels offline. When SDXL/Kokoro are wired, their output files feed
-the same concat path - this adapter does not change.
+Honest scope: with no AI models wired, each scene renders as a deterministic
+animated card, all pure FFmpeg filters (no new dependency, no model):
+
+  * background   - a slowly rotating two-colour gradient (``gradients`` source),
+                   or, when a produced image exists, a slow Ken Burns zoom
+                   (``zoompan``) over that image;
+  * progress bar - a thin bar that fills across the whole video (``overlay`` with
+                   a time expression, offset by the scene's start);
+  * captions     - authored text only, word-wrapped to the frame, each line
+                   fading and sliding in on a fixed stagger (``drawtext`` alpha/y
+                   expressions);
+  * transitions  - a short ``xfade`` push between consecutive scenes.
+
+Every parameter is a module constant, so the same timeline always yields the
+same filtergraph. The motion is real pixel change, so the viral check's
+``freezedetect``/``scdet`` measurements see it without any special-casing.
 """
 
 from __future__ import annotations
 
-import shutil
+import os
 import subprocess
 import tempfile
+import textwrap
 from pathlib import Path
 from typing import Any
 
+from ...core.binaries import ffmpeg_bin, ffmpeg_path
 from ...editing.audio_mix import DEFAULT_DUCK_DB, DEFAULT_MUSIC_DB, DEFAULT_VOICE_DB
 from ...platforms import get_platform
 
@@ -40,27 +54,73 @@ TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 FPS = 30
 
-# Deterministic 9:16 card colours (dark, legible). One per scene, cycled.
-_PALETTE = (
-    "0x11151c",
-    "0x1b2a3a",
-    "0x24313d",
-    "0x2c2340",
-    "0x3a2330",
-    "0x1d3a34",
-    "0x2f2a1c",
-    "0x27303a",
-    "0x191f2b",
+# Deterministic card gradients, one (c0, c1) pair per scene, cycled. The list has
+# an even length and alternates dark / bright (mean luma ~60 vs ~170), so every
+# scene change - including the wrap-around - is a large real visual change and
+# is measurable as one; each pair also spans ~50-80 luma levels internally, so
+# its slow rotation is visible motion rather than a near-flat field.
+_GRADIENTS = (
+    ("0x0b1d51", "0x7c3aed"),  # dark:   navy -> violet
+    ("0xfde047", "0xf97316"),  # bright: yellow -> orange
+    ("0x022c22", "0x0f766e"),  # dark:   pine -> teal
+    ("0x67e8f9", "0x3b82f6"),  # bright: light cyan -> blue
+    ("0x2e1065", "0xc026d3"),  # dark:   deep purple -> fuchsia
+    ("0xfda4af", "0xf43f5e"),  # bright: light rose -> rose
+    ("0x450a0a", "0xc2410c"),  # dark:   maroon -> burnt orange
+    ("0xbef264", "0x10b981"),  # bright: light lime -> emerald
+    ("0x0f172a", "0x6d28d9"),  # dark:   slate -> purple
+    ("0xfed7aa", "0xea580c"),  # bright: peach -> orange
 )
+# Kept for callers that want a flat per-scene colour (first stop of the gradient).
+_PALETTE = tuple(c0 for c0, _ in _GRADIENTS)
+# Gradient rotation per frame (ffmpeg ``gradients`` speed). Measured: at 0.01 the
+# viral check's freezedetect still sees long frozen runs; 0.015 reads as gentle,
+# continuous motion.
+_GRADIENT_SPEED = 0.015
+# Ken Burns zoom over a produced background image: 1.00 -> 1.0 + this per scene.
+_KEN_BURNS_ZOOM = 0.08
+# Scene transition (xfade). 0 disables transitions (hard cuts via concat).
+_TRANSITION = "slideup"
+_TRANSITION_S = 0.12
+# Progress bar: height = frame height // divisor, drawn at the top margin.
+_PROGRESS_BAR_DIVISOR = 160
+_PROGRESS_BAR_TOP_FRACTION = 0.02
 _MIN_SCENE_S = 1.0
 _DEFAULT_SCENE_S = 3.0
 
 # Caption safe-area vertical anchor as a fraction of frame height. 0.78 matches
 # the editing layer default (asur.editing.captions.style_caption y_fraction=0.78)
-# and sits inside the 0.12..0.88 readable band for every pack's safe_area.
+# and sits inside the 0.12..0.88 readable band for every pack's safe_area. A
+# multi-line caption moves up so its last line still ends inside the band.
 _CAPTION_Y_FRACTION = 0.78
-# drawtext box styling: white text, semi-opaque dark box, centred horizontally.
+_CAPTION_SAFE_TOP = 0.12
+_CAPTION_SAFE_BOTTOM = 0.88
+# drawtext styling: white text on a semi-opaque dark box, centred per line.
 _CAPTION_FONT_SIZE_DIVISOR = 22  # font size = frame height // divisor
+_CAPTION_LINE_SPACING = 1.45  # line pitch = font size x this
+_CAPTION_WRAP_WIDTH = 0.86  # usable text width as a share of frame width
+_CAPTION_CHAR_WIDTH = 0.55  # average glyph advance as a share of font size
+# Reveal animation: line i fades in over _FADE_S starting at FIRST + i x STAGGER,
+# sliding up from SLIDE (fraction of frame height) below its resting place.
+_CAPTION_FIRST_DELAY_S = 0.10
+_CAPTION_STAGGER_S = 0.22
+_CAPTION_FADE_S = 0.35
+_CAPTION_SLIDE_FRACTION = 0.015
+# The hook frame used for the thumbnail: by then a caption of up to six lines
+# has fully revealed (0.10 + 5 x 0.22 + 0.35 = 1.55s).
+HOOK_FRAME_S = 1.6
+
+# Font for drawtext. ASUR_FONTFILE wins; otherwise the first of these that
+# exists. With none found, drawtext falls back to fontconfig's default font.
+ENV_FONTFILE = "ASUR_FONTFILE"
+_FONT_CANDIDATES = (
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+)
 
 
 class RenderError(RuntimeError):
@@ -68,8 +128,23 @@ class RenderError(RuntimeError):
 
 
 def _ffmpeg_available() -> bool:
-    """True only if the ffmpeg binary is on PATH (no network/GPU, no import)."""
-    return shutil.which("ffmpeg") is not None
+    """True only if an ffmpeg binary resolves (PATH or ``ASUR_FFMPEG``)."""
+    return ffmpeg_path() is not None
+
+
+def _font_file() -> Path | None:
+    """The font drawtext should use: ``ASUR_FONTFILE``, else a known system font."""
+    override = os.environ.get(ENV_FONTFILE, "").strip()
+    if override:
+        path = Path(override).expanduser()
+        if not path.is_file():
+            raise RenderError(f"{ENV_FONTFILE}={override!r} is not a file (fail closed)")
+        return path
+    for candidate in _FONT_CANDIDATES:
+        path = Path(candidate)
+        if path.is_file():
+            return path
+    return None
 
 
 def _scene_captions(timeline: dict[str, Any]) -> list[str]:
@@ -111,8 +186,8 @@ def _scene_backgrounds(
 
     A produced background is keyed in ``backgrounds`` by its scene id; the asset
     ref that produced it is ``f"{scene_id}-background"``. A scene with no produced
-    image renders a solid colour card (the P10 fallback), so a render with no
-    backgrounds at all is byte-identical. A referenced file that is NOT on disk
+    image renders the animated gradient card (the fallback), so a render with no
+    backgrounds at all is unaffected. A referenced file that is NOT on disk
     fails closed (``RenderError``, ASUR-GATE-01): we never silently drop a visual
     the plan said exists.
     """
@@ -166,26 +241,128 @@ def _escape_concat_path(path: str) -> str:
     return "'" + path.replace("'", "'\\''") + "'"
 
 
-def _drawtext_filter(textfile: Path, *, height: int) -> str:
-    """Build a centred, safe-area drawtext filter for one card's caption.
+def _caption_font_size(height: int) -> int:
+    return max(height // _CAPTION_FONT_SIZE_DIVISOR, 12)
+
+
+def _wrap_caption(text: str, *, width: int, font_size: int) -> list[str]:
+    """Word-wrap *text* into lines that fit the frame (drawtext never wraps).
+
+    The line length is a fixed estimate from the font size, so wrapping is
+    deterministic and does not depend on which font the ffmpeg build resolves.
+    """
+    max_chars = max(8, int(width * _CAPTION_WRAP_WIDTH / (font_size * _CAPTION_CHAR_WIDTH)))
+    return textwrap.wrap(" ".join(text.split()), width=max_chars) or []
+
+
+def _reveal_expr(delay_s: float) -> str:
+    """0 -> 1 ramp that starts at *delay_s* and lasts _CAPTION_FADE_S (drawtext ``t``)."""
+    return f"min(1,max(0,(t-{delay_s:.3f})/{_CAPTION_FADE_S:.3f}))"
+
+
+def _caption_block_top(line_count: int, *, height: int, line_px: int) -> int:
+    """Top y of a caption block: the 0.78 anchor, moved up to stay in the safe band."""
+    top = round(height * _CAPTION_Y_FRACTION)
+    bottom_limit = round(height * _CAPTION_SAFE_BOTTOM)
+    if top + line_count * line_px > bottom_limit:
+        top = bottom_limit - line_count * line_px
+    return max(top, round(height * _CAPTION_SAFE_TOP))
+
+
+def _drawtext_filter(
+    textfile: Path,
+    *,
+    height: int,
+    y_px: int | None = None,
+    delay_s: float | None = None,
+    fontfile: Path | None = None,
+) -> str:
+    """Build a centred, safe-area drawtext filter for one caption line.
 
     The caption is read from *textfile* (``textfile=``) instead of being inlined
     as ``text=``: the authored words then never pass through filtergraph
     escaping at all, and ``expansion=none`` stops drawtext from interpreting
     ``%{...}`` sequences, so apostrophes, colons, percent signs and backslashes
-    render verbatim. Only the file path is escaped (see _escape_option_value).
+    render verbatim. Only the file paths and the animation expressions are
+    escaped (see _escape_option_value).
+
+    With ``delay_s`` the line fades in (``alpha``) and slides up into place
+    (``y``) starting ``delay_s`` seconds into the card; without it the line is
+    static (the pre-animation behaviour).
     """
-    font_size = max(height // _CAPTION_FONT_SIZE_DIVISOR, 12)
-    y_px = round(height * _CAPTION_Y_FRACTION)
-    # x centres the box; y sits on the safe-area anchor; a translucent box keeps
-    # white text legible over any card colour.
-    return (
-        f"drawtext=textfile={_escape_option_value(str(textfile))}"
-        ":expansion=none"
-        f":fontcolor=white:fontsize={font_size}"
-        ":box=1:boxcolor=black@0.5:boxborderw=12"
-        f":x=(w-text_w)/2:y={y_px}"
-    )
+    font_size = _caption_font_size(height)
+    y_rest = round(height * _CAPTION_Y_FRACTION) if y_px is None else y_px
+    parts = [
+        f"drawtext=textfile={_escape_option_value(str(textfile))}",
+        "expansion=none",
+    ]
+    if fontfile is not None:
+        parts.append(f"fontfile={_escape_option_value(str(fontfile))}")
+    parts += [
+        "fontcolor=white",
+        f"fontsize={font_size}",
+        "box=1",
+        "boxcolor=black@0.55",
+        f"boxborderw={max(font_size // 6, 4)}",
+        # x centres each line; y sits on its safe-area slot.
+        "x=(w-text_w)/2",
+    ]
+    if delay_s is None:
+        parts.append(f"y={y_rest}")
+    else:
+        ramp = _reveal_expr(delay_s)
+        slide = max(round(height * _CAPTION_SLIDE_FRACTION), 1)
+        parts.append(f"y={_escape_option_value(f'{y_rest}+{slide}*(1-{ramp})')}")
+        parts.append(f"alpha={_escape_option_value(ramp)}")
+    return ":".join(parts)
+
+
+def _caption_filters(
+    caption: str,
+    index: int,
+    work: Path,
+    *,
+    width: int,
+    height: int,
+    fontfile: Path | None,
+) -> list[str]:
+    """One animated drawtext per wrapped caption line (empty caption -> none)."""
+    font_size = _caption_font_size(height)
+    lines = _wrap_caption(caption, width=width, font_size=font_size)
+    line_px = round(font_size * _CAPTION_LINE_SPACING)
+    top = _caption_block_top(len(lines), height=height, line_px=line_px)
+    filters: list[str] = []
+    for i, line in enumerate(lines):
+        textfile = work / f"caption_{index:03d}_{i:02d}.txt"
+        textfile.write_text(line, encoding="utf-8")
+        filters.append(
+            _drawtext_filter(
+                textfile,
+                height=height,
+                y_px=top + i * line_px,
+                delay_s=_CAPTION_FIRST_DELAY_S + i * _CAPTION_STAGGER_S,
+                fontfile=fontfile,
+            )
+        )
+    return filters
+
+
+def _progress_bar_filters(
+    *, width: int, height: int, offset_s: float, total_s: float
+) -> tuple[str, str, int]:
+    """(track drawbox, overlay filter, bar height) for the whole-video progress bar.
+
+    The bar is a white ``color`` strip overlaid at ``x = W*(offset+t)/total - w``:
+    it fills left-to-right across the WHOLE video because each card passes its
+    own start time (``offset_s``) and the video's total length.
+    """
+    bar_h = max(height // _PROGRESS_BAR_DIVISOR, 2)
+    y = round(height * _PROGRESS_BAR_TOP_FRACTION)
+    track = f"drawbox=x=0:y={y}:w=iw:h={bar_h}:color=white@0.25:t=fill"
+    total = max(total_s, 0.001)
+    x_expr = _escape_option_value(f"W*({offset_s:.3f}+t)/{total:.3f}-w")
+    overlay = f"overlay=x={x_expr}:y={y}:eval=frame"
+    return track, overlay, bar_h
 
 
 def _scene_durations(timeline: dict[str, Any]) -> list[float]:
@@ -219,57 +396,87 @@ def _render_card(
     caption: str = "",
     background: Path | None = None,
     skipped: list[int] | None = None,
+    offset_s: float = 0.0,
+    total_s: float | None = None,
+    tail_s: float = 0.0,
+    fontfile: Path | None = None,
 ) -> Path:
-    """Render ONE card at the given resolution/fps (deterministic).
+    """Render ONE animated card at the given resolution/fps (deterministic).
 
-    When ``background`` is given (a real produced image, e.g. an SDXL PNG), the
-    card is that image scaled-to-cover and centre-cropped to the frame - a true
-    AI visual, not a placeholder (SPEC-GAP G27). When ``background`` is None the
-    card is a deterministic solid colour (the P10 fallback), so a render with no
-    produced backgrounds is byte-identical.
+    Background: when ``background`` is given (a real produced image, e.g. an
+    SDXL PNG) it is scaled-to-cover, centre-cropped and slowly zoomed (Ken
+    Burns, ``zoompan``) - a true AI visual, not a placeholder (SPEC-GAP G27).
+    Otherwise the card is a slowly rotating two-colour gradient (``gradients``).
 
-    When ``caption`` is non-empty, the authored text is burned into the safe area
-    via drawtext (joined onto the SAME ``-vf`` chain as any scale/crop), so an
-    empty caption + no background renders the exact pre-P11b clean card.
+    On top: the whole-video progress bar (positioned by ``offset_s`` /
+    ``total_s``) and, when ``caption`` is non-empty, the authored text burned
+    into the safe area line by line with a staggered fade/slide reveal.
+
+    ``tail_s`` extends the card past its scene so the next scene's ``xfade``
+    has frames to blend; the scene's own timing is unchanged.
     """
-    colour = _PALETTE[index % len(_PALETTE)]
+    c0, c1 = _GRADIENTS[index % len(_GRADIENTS)]
     out = work / f"scene_{index:03d}.mp4"
-    # Build the video-filter chain. A background image needs scale-to-cover +
-    # centre-crop to the exact frame; the solid-colour source already fills it.
-    vf_parts: list[str] = []
+    length = seconds + max(tail_s, 0.0)
+    frames = max(round(length * fps), 1)
+    total = seconds if total_s is None else total_s
     if background is not None:
         cmd = [
-            "ffmpeg",
+            ffmpeg_bin(),
             "-y",
             "-loop",
             "1",
             "-framerate",
             str(fps),
             "-t",
-            f"{seconds:.3f}",
+            f"{length:.3f}",
             "-i",
             str(background),
         ]
-        vf_parts.append(
+        bg_chain = (
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},setsar=1"
+            f"crop={width}:{height},setsar=1,"
+            f"zoompan=z=1+{_KEN_BURNS_ZOOM}*on/{frames}"
+            ":x=iw/2-(iw/zoom/2):y=ih/2-(ih/zoom/2)"
+            f":d=1:s={width}x{height}:fps={fps}"
         )
     else:
         cmd = [
-            "ffmpeg",
+            ffmpeg_bin(),
             "-y",
             "-f",
             "lavfi",
             "-i",
-            f"color=c={colour}:s={width}x{height}:r={fps}:d={seconds:.3f}",
+            (
+                f"gradients=s={width}x{height}:r={fps}:d={length:.3f}"
+                f":c0={c0}:c1={c1}:x0=0:y0=0:x1={width}:y1={height}"
+                f":speed={_GRADIENT_SPEED}:seed=0"
+            ),
         ]
-    if caption:
-        textfile = work / f"caption_{index:03d}.txt"
-        textfile.write_text(caption, encoding="utf-8")
-        vf_parts.append(_drawtext_filter(textfile, height=height))
-    if vf_parts:
-        cmd += ["-vf", ",".join(vf_parts)]
+        bg_chain = "null"
+    track, overlay, bar_h = _progress_bar_filters(
+        width=width, height=height, offset_s=offset_s, total_s=total
+    )
     cmd += [
+        "-f",
+        "lavfi",
+        "-i",
+        f"color=c=white:size={width}x{bar_h}:rate={fps}:duration={length:.3f}",
+    ]
+    graph = f"[0:v]{bg_chain},{track}[bg];[bg][1:v]{overlay}"
+    if caption:
+        for flt in _caption_filters(
+            caption, index, work, width=width, height=height, fontfile=fontfile
+        ):
+            graph += f",{flt}"
+    graph += ",format=yuv420p[v]"
+    cmd += [
+        "-filter_complex",
+        graph,
+        "-map",
+        "[v]",
+        "-frames:v",
+        str(frames),
         "-c:v",
         "libx264",
         "-preset",
@@ -278,19 +485,61 @@ def _render_card(
         "yuv420p",  # mandatory: yuv444p shows black on phones
         str(out),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
     if caption and proc.returncode != 0 and "No such filter: 'drawtext'" in (proc.stderr or ""):
-        # This ffmpeg build has no libfreetype. Render the card clean (KEEPING the
-        # background image) and record the skip so provenance never claims text
-        # that is not on screen (ASUR-HONEST-01) instead of failing the render.
+        # This ffmpeg build has no libfreetype. Render the card without text
+        # (KEEPING the background and motion) and record the skip so provenance
+        # never claims text that is not on screen (ASUR-HONEST-01) instead of
+        # failing the render.
         if skipped is not None:
             skipped.append(index)
         return _render_card(
-            index, seconds, work, width=width, height=height, fps=fps, background=background
+            index,
+            seconds,
+            work,
+            width=width,
+            height=height,
+            fps=fps,
+            background=background,
+            offset_s=offset_s,
+            total_s=total_s,
+            tail_s=tail_s,
         )
     if proc.returncode != 0 or not out.is_file():
         raise RenderError(f"ffmpeg card render failed (scene {index}): {proc.stderr[-400:]}")
     return out
+
+
+def _audio_args(first_index: int, voice: Path | None, music: Path | None) -> tuple[list[str], str, list[str]]:
+    """(extra -i inputs, audio filtergraph or "", output args) for the mux.
+
+    Audio has three honest states (never a fabricated track):
+      * ``voice`` + ``music`` -> a true two-track mix. Voice sits at
+        ``DEFAULT_VOICE_DB`` and music is ducked to ``DEFAULT_MUSIC_DB +
+        DEFAULT_DUCK_DB`` so narration stays intelligible, then ``amix`` folds
+        them (``asur.editing.audio_mix`` levels).
+      * exactly one of them -> single-track mux, trimmed to video length.
+      * neither -> silent.
+    """
+    if voice is not None and music is not None:
+        ducked = DEFAULT_MUSIC_DB + DEFAULT_DUCK_DB
+        a, m = first_index, first_index + 1
+        graph = (
+            f"[{a}:a]volume={DEFAULT_VOICE_DB}dB[va];"
+            f"[{m}:a]volume={ducked}dB[ma];"
+            "[va][ma]amix=inputs=2:duration=longest:dropout_transition=0[a]"
+        )
+        return (["-i", str(voice), "-i", str(music)], graph,
+                ["-map", "[a]", "-c:a", "aac", "-shortest"])
+    single = voice if voice is not None else music
+    if single is not None:
+        return (["-i", str(single)], "",
+                ["-map", f"{first_index}:a", "-c:a", "aac", "-shortest"])
+    return ([], "", [])
+
+
+_VIDEO_OUT = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+              "-movflags", "+faststart"]
 
 
 def _concat(
@@ -301,18 +550,11 @@ def _concat(
     audio_path: Path | None = None,
     music_path: Path | None = None,
 ) -> None:
-    """Join per-scene cards into the final MP4 via the concat demuxer.
+    """Join per-scene cards with hard cuts via the concat demuxer, then mux audio.
 
     Abs paths need ``-safe 0``. The concat-demuxer re-encodes here (simple,
     robust across mismatched inputs); ``+faststart`` makes the file web-ready.
-
-    Audio has three honest states (never a fabricated track):
-      * ``audio_path`` + ``music_path`` -> a true two-track mix. Voice sits at
-        ``DEFAULT_VOICE_DB`` and music is ducked to ``DEFAULT_MUSIC_DB +
-        DEFAULT_DUCK_DB`` so narration stays intelligible, then ``amix`` folds
-        them (``asur.editing.audio_mix`` levels).
-      * exactly one of them -> single-track mux, trimmed to video length.
-      * neither -> silent.
+    See ``_audio_args`` for the audio states.
     """
     listing = work / "concat.txt"
     # concat demuxer wants: file '<abs path>' per line, quoted per its rules.
@@ -320,56 +562,63 @@ def _concat(
         "".join(f"file {_escape_concat_path(str(c.resolve()))}\n" for c in cards),
         encoding="utf-8",
     )
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(listing),
-    ]
-    two_track = audio_path is not None and music_path is not None
-    single = (audio_path is not None) ^ (music_path is not None)
-    if two_track:
-        cmd += ["-i", str(audio_path), "-i", str(music_path)]
-    elif single:
-        cmd += ["-i", str(audio_path if audio_path is not None else music_path)]
-    cmd += [
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-    ]
-    if two_track:
-        # Voice (input 1) over ducked music (input 2); amix keeps both audible.
-        ducked = DEFAULT_MUSIC_DB + DEFAULT_DUCK_DB
-        cmd += [
-            "-filter_complex",
-            (
-                f"[1:a]volume={DEFAULT_VOICE_DB}dB[v];"
-                f"[2:a]volume={ducked}dB[m];"
-                "[v][m]amix=inputs=2:duration=longest:dropout_transition=0[a]"
-            ),
-            "-map",
-            "0:v",
-            "-map",
-            "[a]",
-            "-c:a",
-            "aac",
-            "-shortest",
-        ]
-    elif single:
-        cmd += ["-c:a", "aac", "-shortest"]
-    cmd += [str(out_path)]
+    inputs, audio_graph, audio_out = _audio_args(1, audio_path, music_path)
+    cmd = [ffmpeg_bin(), "-y", "-f", "concat", "-safe", "0", "-i", str(listing), *inputs]
+    if audio_graph:
+        cmd += ["-filter_complex", audio_graph, "-map", "0:v"]
+    elif audio_out:
+        cmd += ["-map", "0:v"]
+    cmd += [*_VIDEO_OUT, *audio_out, str(out_path)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
     if proc.returncode != 0 or not out_path.is_file():
         raise RenderError(f"ffmpeg concat failed: {proc.stderr[-400:]}")
+
+
+def _xfade_graph(durations: list[float], *, transition: str, transition_s: float) -> str:
+    """Chain ``xfade`` over N card inputs; scene k+1 starts at its timeline start.
+
+    Every card except the last carries a ``transition_s`` tail, so after joining
+    cards 0..k the stream is ``sum(d[0..k]) + transition_s`` long and the next
+    xfade's offset is exactly ``sum(d[0..k])``: the joined video keeps the
+    timeline's total length and every scene keeps its start time.
+    """
+    parts: list[str] = []
+    prev = "[0:v]"
+    offset = 0.0
+    for k in range(1, len(durations)):
+        offset += durations[k - 1]
+        label = "[v]" if k == len(durations) - 1 else f"[x{k}]"
+        parts.append(
+            f"{prev}[{k}:v]xfade=transition={transition}:duration={transition_s:.3f}"
+            f":offset={offset:.3f}{label}"
+        )
+        prev = label
+    return ";".join(parts)
+
+
+def _xfade_join(
+    cards: list[Path],
+    durations: list[float],
+    out_path: Path,
+    *,
+    audio_path: Path | None = None,
+    music_path: Path | None = None,
+    transition: str = _TRANSITION,
+    transition_s: float = _TRANSITION_S,
+) -> None:
+    """Join cards with ``xfade`` transitions and mux audio in one ffmpeg pass."""
+    cmd = [ffmpeg_bin(), "-y"]
+    for card in cards:
+        cmd += ["-i", str(card)]
+    inputs, audio_graph, audio_out = _audio_args(len(cards), audio_path, music_path)
+    cmd += inputs
+    graph = _xfade_graph(durations, transition=transition, transition_s=transition_s)
+    if audio_graph:
+        graph += ";" + audio_graph
+    cmd += ["-filter_complex", graph, "-map", "[v]", *_VIDEO_OUT, *audio_out, str(out_path)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+    if proc.returncode != 0 or not out_path.is_file():
+        raise RenderError(f"ffmpeg xfade join failed: {proc.stderr[-400:]}")
 
 
 def render(
@@ -380,29 +629,34 @@ def render(
     audio_path: str | None = None,
     music_path: str | None = None,
     backgrounds: dict[str, str] | None = None,
+    transition_s: float | None = None,
     **params: Any,
 ) -> dict[str, Any]:
     """Render a Timeline (dict or ``.to_dict()``-able) to a real MP4 file.
 
     Resolution and fps come from the chosen platform pack's ``FormatSpec``
-    (SPEC-GAP G20): ``platform=None`` resolves to the Instagram-Reels default and
-    stays byte-identical at 1080x1920 (ASUR-VERSION-01), while ``youtube_long``
-    renders 16:9 1920x1080. An unknown platform id fails closed via
-    ``get_platform`` (UnknownPlatform) before any work.
+    (SPEC-GAP G20): ``platform=None`` resolves to the Instagram-Reels default at
+    1080x1920 (ASUR-VERSION-01), while ``youtube_long`` renders 16:9 1920x1080.
+    An unknown platform id fails closed via ``get_platform`` (UnknownPlatform)
+    before any work.
+
+    ``transition_s`` overrides the xfade length between scenes (``0`` = hard
+    cuts through the concat demuxer). It is clamped below the shortest scene.
 
     Returns a provenance+license block (ASUR-PROV-01) describing the output:
-    model, license, media type, the output path, and basic structural facts.
-    Fails closed (``RenderError``) when the ffmpeg binary is absent and when the
-    timeline declares an explicit empty scene list, so a stdlib-only machine
-    without ffmpeg - or an edit plan with nothing to render - gets a clear
-    message, never a silent pass (ASUR-GATE-01).
+    model, license, media type, the output path, structural facts, and the
+    motion design actually applied. Fails closed (``RenderError``) when the
+    ffmpeg binary is absent and when the timeline declares an explicit empty
+    scene list, so a stdlib-only machine without ffmpeg - or an edit plan with
+    nothing to render - gets a clear message, never a silent pass
+    (ASUR-GATE-01).
     """
     spec = get_platform(platform).format_spec
     width, height, fps = spec.width, spec.height, spec.fps
 
     if not _ffmpeg_available():
         raise RenderError(
-            "FFmpeg adapter needs the ffmpeg binary on PATH "
+            "FFmpeg adapter needs an ffmpeg binary on PATH or in ASUR_FFMPEG "
             "(brew install ffmpeg / apt install ffmpeg). No model download needed."
         )
 
@@ -416,6 +670,12 @@ def render(
     captions = _scene_captions(tl)
     scene_backgrounds = _scene_backgrounds(tl, backgrounds)
     skipped: list[int] = []
+    fontfile = _font_file() if any(captions) else None
+
+    trans = _TRANSITION_S if transition_s is None else max(float(transition_s), 0.0)
+    if len(durations) < 2:
+        trans = 0.0
+    trans = min(trans, round(min(durations) / 2, 3))
 
     voice = Path(audio_path) if audio_path else None
     if voice is None or not voice.is_file():
@@ -428,34 +688,62 @@ def render(
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+    total_s = round(sum(durations), 3)
 
     with tempfile.TemporaryDirectory(prefix="asur_render_") as tmp:
         work = Path(tmp)
-        cards = [
-            _render_card(
-                i,
-                dur,
-                work,
-                width=width,
-                height=height,
-                fps=fps,
-                caption=captions[i] if i < len(captions) else "",
-                background=scene_backgrounds[i] if i < len(scene_backgrounds) else None,
-                skipped=skipped,
+        cards: list[Path] = []
+        offset = 0.0
+        for i, dur in enumerate(durations):
+            cards.append(
+                _render_card(
+                    i,
+                    dur,
+                    work,
+                    width=width,
+                    height=height,
+                    fps=fps,
+                    caption=captions[i] if i < len(captions) else "",
+                    background=scene_backgrounds[i] if i < len(scene_backgrounds) else None,
+                    skipped=skipped,
+                    offset_s=offset,
+                    total_s=total_s,
+                    tail_s=trans if i < len(durations) - 1 else 0.0,
+                    fontfile=fontfile,
+                )
             )
-            for i, dur in enumerate(durations)
-        ]
-        _concat(cards, out, work, audio_path=voice, music_path=music)
+            offset += dur
+        if trans > 0:
+            _xfade_join(cards, durations, out, audio_path=voice, music_path=music,
+                        transition_s=trans)
+        else:
+            _concat(cards, out, work, audio_path=voice, music_path=music)
 
-    total_s = round(sum(durations), 3)
     backgrounds_used = sum(1 for bg in scene_backgrounds if bg is not None)
     captions_burned_in = any(c for i, c in enumerate(captions) if i not in skipped)
     captions_skipped_reason = (
         "ffmpeg build lacks the drawtext filter (libfreetype); "
-        f"{len(skipped)} caption card(s) rendered clean"
+        f"{len(skipped)} caption card(s) rendered without text"
         if skipped
         else None
     )
+    motion = {
+        "background": (
+            f"ken-burns zoom 1.00->{1 + _KEN_BURNS_ZOOM:.2f} on produced images; "
+            f"rotating gradient (speed {_GRADIENT_SPEED}) elsewhere"
+            if backgrounds_used
+            else f"rotating two-colour gradient (ffmpeg gradients, speed {_GRADIENT_SPEED})"
+        ),
+        "progress_bar": True,
+        "caption_reveal": (
+            f"per-line fade+slide, {_CAPTION_FADE_S}s each, {_CAPTION_STAGGER_S}s stagger"
+            if captions_burned_in
+            else None
+        ),
+        "transition": (
+            {"type": _TRANSITION, "duration_s": trans} if trans > 0 else {"type": "cut"}
+        ),
+    }
     return {
         "media_type": MEDIA_TYPE,
         "origin": "procedural",
@@ -471,25 +759,34 @@ def render(
             "backgrounds_used": backgrounds_used,
             "captions_burned_in": captions_burned_in,
             "captions_skipped_reason": captions_skipped_reason,
+            "caption_font": fontfile.name if fontfile is not None and captions_burned_in else None,
             "audio_present": audio_present,
             "audio_tracks": audio_tracks,
+            "motion": motion,
             "note": (
                 f"{backgrounds_used} scene(s) composited over real AI background "
-                f"image(s); remaining scenes are deterministic solid-colour "
+                f"image(s); remaining scenes are deterministic animated-gradient "
                 f"{spec.aspect_ratio} cards"
                 if backgrounds_used
                 else (
-                    f"deterministic solid-colour {spec.aspect_ratio} cards; "
-                    "no model, no network, no GPU"
+                    f"deterministic animated-gradient {spec.aspect_ratio} cards "
+                    "(pure ffmpeg filters); no model, no network, no GPU"
                 )
             ),
         },
         "license": {
             "name": LICENSE,
             "commercial_ok": True,
-            "note": "FFmpeg is a tool; output of procedural colour cards is unencumbered",
+            "note": "FFmpeg is a tool; output of procedural gradient cards is unencumbered",
         },
     }
+
+
+def thumbnail_timestamp(duration_s: float | None) -> float:
+    """When to grab the thumbnail: the settled hook frame, inside short videos too."""
+    if not duration_s or duration_s <= 0:
+        return 0.0
+    return round(min(HOOK_FRAME_S, duration_s / 2), 3)
 
 
 def grab_thumbnail(
@@ -509,13 +806,13 @@ def grab_thumbnail(
     """
     if not _ffmpeg_available():
         raise RenderError(
-            "FFmpeg adapter needs the ffmpeg binary on PATH to grab a thumbnail "
-            "(brew install ffmpeg / apt install ffmpeg)."
+            "FFmpeg adapter needs an ffmpeg binary on PATH or in ASUR_FFMPEG to grab "
+            "a thumbnail (brew install ffmpeg / apt install ffmpeg)."
         )
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "ffmpeg",
+        ffmpeg_bin(),
         "-y",
         "-ss",
         f"{timestamp_s:.3f}",
@@ -544,6 +841,6 @@ def grab_thumbnail(
         "license": {
             "name": LICENSE,
             "commercial_ok": True,
-            "note": "frame of a procedural colour-card render; unencumbered",
+            "note": "frame of a procedural gradient-card render; unencumbered",
         },
     }

@@ -23,10 +23,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+
+from ..core.binaries import ffmpeg_bin, ffmpeg_path, ffprobe_bin, ffprobe_path
 
 __all__ = [
     "OPENING_WINDOW_S",
@@ -51,7 +52,7 @@ class ProbeUnavailable(RuntimeError):
 
 
 def tools_available() -> bool:
-    return shutil.which("ffprobe") is not None and shutil.which("ffmpeg") is not None
+    return ffprobe_path() is not None and ffmpeg_path() is not None
 
 
 def _run(cmd: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
@@ -102,7 +103,7 @@ def _overlap(spans: list[tuple[float, float]], lo: float, hi: float) -> float:
 
 def _probe_streams(path: Path, timeout: float) -> dict[str, Any]:
     proc = _run(
-        ["ffprobe", "-v", "error", "-show_entries",
+        [ffprobe_bin(), "-v", "error", "-show_entries",
          "format=duration,size,bit_rate:stream=codec_type,codec_name,width,height,"
          "r_frame_rate,sample_rate,channels",
          "-of", "json", str(path)],
@@ -132,7 +133,7 @@ def _probe_streams(path: Path, timeout: float) -> dict[str, Any]:
 
 def _audio_pass(path: Path, duration: float, timeout: float) -> dict[str, Any]:
     proc = _run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-vn", "-af",
+        [ffmpeg_bin(), "-hide_banner", "-nostats", "-i", str(path), "-vn", "-af",
          f"ebur128=framelog=quiet,volumedetect,"
          f"silencedetect=noise={SILENCE_NOISE_DB}dB:d={SILENCE_MIN_S}",
          "-f", "null", "-"],
@@ -160,7 +161,7 @@ def _audio_pass(path: Path, duration: float, timeout: float) -> dict[str, Any]:
 
 def _video_pass(path: Path, duration: float, timeout: float) -> dict[str, Any]:
     proc = _run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-an", "-vf",
+        [ffmpeg_bin(), "-hide_banner", "-nostats", "-i", str(path), "-an", "-vf",
          f"scale=270:-2,scdet=threshold={SCENE_THRESHOLD},"
          f"blackdetect=d={BLACK_MIN_S}:pix_th=0.10,"
          f"freezedetect=n=0.003:d={FREEZE_MIN_S}",
@@ -203,7 +204,9 @@ def measure_video(path: str | Path, *, timeout_s: float = 300.0) -> dict[str, An
     if not video.is_file():
         raise ProbeUnavailable(f"video file not found: {video}")
     if not tools_available():
-        raise ProbeUnavailable("ffprobe/ffmpeg not on PATH; cannot measure the render")
+        raise ProbeUnavailable(
+            "ffprobe/ffmpeg not found (PATH, or ASUR_FFMPEG/ASUR_FFPROBE); cannot measure the render"
+        )
     facts: dict[str, Any] = {"file": str(video), "sha256": _sha256(video)}
     facts.update(_probe_streams(video, timeout_s))
     duration = float(facts["duration_s"])

@@ -103,13 +103,16 @@ def _install_fake_ffmpeg(monkeypatch):
 
 
 def _resolutions_in(captured: list[list[str]]) -> set[str]:
-    """Extract every WxH token that appears in a color= lavfi source argv."""
+    """Extract every WxH frame size from the cards' lavfi background sources.
+
+    The default card background is the animated ``gradients`` source
+    (``gradients=s=1080x1920:r=30:d=...``); its ``s=`` is the frame size.
+    """
     found: set[str] = set()
     for cmd in captured:
         for token in cmd:
-            if "color=" in token and ":s=" in token:
-                # color=c=0x...:s=1080x1920:r=30:d=...
-                for part in token.split(":"):
+            if token.startswith("gradients="):
+                for part in token[len("gradients="):].split(":"):
                     if part.startswith("s="):
                         found.add(part[2:])
     return found

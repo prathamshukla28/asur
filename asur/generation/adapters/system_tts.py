@@ -21,6 +21,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ...core.binaries import ffmpeg_bin, ffmpeg_path, ffprobe_bin, ffprobe_path
+
 SAMPLE_RATE = 44100
 DEFAULT_RATE_WPM = 175
 
@@ -30,7 +32,7 @@ class TTSUnavailable(RuntimeError):
 
 
 def available_engine() -> str | None:
-    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+    if ffmpeg_path() is None or ffprobe_path() is None:
         return None
     for engine in ("say", "espeak-ng", "espeak"):
         if shutil.which(engine):
@@ -46,7 +48,7 @@ def _run(cmd: list[str]) -> None:
 
 def _duration(path: Path) -> float:
     proc = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+        [ffprobe_bin(), "-v", "error", "-show_entries", "format=duration",
          "-of", "default=nw=1:nk=1", str(path)],
         capture_output=True, text=True, timeout=60, check=False,
     )
@@ -88,7 +90,7 @@ def synthesize_narration(
             text = " ".join(str(seg.get("text", "")).split())
             part = work / f"part_{i:03d}.wav"
             if not text or text.startswith("(none"):
-                _run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
                       f"anullsrc=r={SAMPLE_RATE}:cl=mono", "-t", f"{dur:.3f}", str(part)])
             else:
                 raw = work / f"raw_{i:03d}.{'aiff' if engine == 'say' else 'wav'}"
@@ -97,13 +99,13 @@ def synthesize_narration(
                 # Leave 0.15s of air at the cut; speed up (max 1.6x) only if needed.
                 tempo = min(1.6, max(1.0, spoken / max(0.1, dur - 0.15)))
                 fitted += int(tempo > 1.0)
-                _run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-af",
+                _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(raw), "-af",
                       f"atempo={tempo:.4f},apad=whole_dur={dur:.3f},atrim=0:{dur:.3f}",
                       "-ar", str(SAMPLE_RATE), "-ac", "1", str(part)])
             parts.append(part)
         listing = work / "parts.txt"
         listing.write_text("".join(f"file '{p}'\n" for p in parts), encoding="utf-8")
-        _run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+        _run([ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
               "-i", str(listing), "-c:a", "pcm_s16le", str(out)])
     commercial = engine != "say"
     return {

@@ -18,11 +18,11 @@ real render itself is done by the media adapters behind ``asur[generation]``.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
+from ..core.binaries import ffprobe_bin, ffprobe_path
 from ..core.envelope import Artifact, make_artifact
 from ..core.identity import Identity
 from ..platforms import get_platform
@@ -143,14 +143,14 @@ def build_hero_proof(
 
 def _ffprobe_available() -> bool:
     """True only if the ffprobe binary is actually on PATH (no network/GPU)."""
-    return shutil.which("ffprobe") is not None
+    return ffprobe_path() is not None
 
 
 def _probe_dimensions_duration(video_path: Path) -> tuple[int, int, float]:
     """Return (width, height, duration_s) via ffprobe. Caller guards availability."""
     out = subprocess.run(
         [
-            "ffprobe",
+            ffprobe_bin(),
             "-v",
             "error",
             "-select_streams",

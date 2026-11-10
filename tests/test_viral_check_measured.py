@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from asur.core import binaries
 from asur.viral_check import probe
 from asur.viral_check.check import check_video
 from asur.viral_check.evaluate import PASS, REJECT
@@ -22,7 +23,8 @@ pytestmark = pytest.mark.skipif(not probe.tools_available(), reason="ffmpeg/ffpr
 
 
 def _ffmpeg(*args: str) -> None:
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True, capture_output=True)
+    subprocess.run([binaries.ffmpeg_bin(), "-y", "-loglevel", "error", *args], check=True,
+                   capture_output=True)
 
 
 @pytest.fixture(scope="module")
@@ -141,7 +143,9 @@ def test_unmeasurable_file_fails_closed(tmp_path, monkeypatch):
     bogus.write_bytes(b"not a video")
     with pytest.raises(ProbeUnavailable):
         measure_video(bogus)
-    monkeypatch.setattr(probe.shutil, "which", lambda name: None)
+    monkeypatch.delenv("ASUR_FFMPEG", raising=False)
+    monkeypatch.delenv("ASUR_FFPROBE", raising=False)
+    monkeypatch.setattr(binaries.shutil, "which", lambda name: None)
     with pytest.raises(ProbeUnavailable):
         measure_video(bogus)
 

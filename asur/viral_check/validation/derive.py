@@ -84,10 +84,11 @@ def probe_clip(clip_path: str | Path) -> dict:  # pragma: no cover
     actual study against a downloaded clip; tests inject ``probe`` instead.
     """
     import json
-    import shutil
     import subprocess
 
-    ffprobe = shutil.which("ffprobe")
+    from ...core.binaries import ffprobe_path
+
+    ffprobe = ffprobe_path()
     if ffprobe is None:
         raise RuntimeError("ffprobe not found; install FFmpeg to probe clips")
 

@@ -13,7 +13,8 @@ The mix contract (ASUR-EXPLAIN-01):
     is ducked well under it so narration stays intelligible. The dB levels come
     from ``asur.editing.audio_mix`` (voice -3dB, music -18dB, duck -8dB).
   * When only ONE audio track (voice OR music) is present the single-track path
-    is byte-identical to before: one ``-i`` input, no ``amix`` / ``filter_complex``.
+    muxes it directly: one audio ``-i`` input, no ``amix`` and no volume graph.
+    (The video side may still use ``filter_complex`` for the xfade transitions.)
   * With no audio the render stays silent (no fabricated track).
 """
 
@@ -83,11 +84,16 @@ def _install_fake_ffmpeg(monkeypatch):
 
 
 def _concat_cmd(captured: list[list[str]]) -> list[str]:
-    """The final concat/mux command (the one whose input is the concat listing)."""
+    """The final join/mux command: the one that reads the per-scene cards.
+
+    With transitions on (the default) that is the xfade join; with
+    ``transition_s=0`` it is the concat-demuxer command. Both mux the audio.
+    """
     for cmd in captured:
-        if "concat" in cmd and "concat.txt" in " ".join(cmd):
+        joined = " ".join(cmd)
+        if "concat.txt" in joined or "xfade=" in joined:
             return cmd
-    raise AssertionError("no concat command captured")
+    raise AssertionError("no join/mux command captured")
 
 
 # --------------------------------------------------------------------------- #
@@ -139,7 +145,7 @@ def test_voice_only_is_single_track_no_mix(monkeypatch, tmp_path):
     joined = " ".join(concat)
     assert str(voice) in joined
     assert "amix" not in joined
-    assert "filter_complex" not in joined
+    assert "volume=" not in joined
     assert result["provenance"]["audio_present"] is True
     assert result["provenance"]["audio_tracks"] == 1
 
@@ -173,7 +179,7 @@ def test_no_audio_stays_silent(monkeypatch, tmp_path):
     concat = _concat_cmd(captured)
     joined = " ".join(concat)
     assert "amix" not in joined
-    assert "filter_complex" not in joined
+    assert "volume=" not in joined
     assert result["provenance"]["audio_present"] is False
     assert result["provenance"]["audio_tracks"] == 0
 
@@ -194,3 +200,40 @@ def test_missing_music_file_is_ignored_not_fabricated(monkeypatch, tmp_path):
     joined = " ".join(concat)
     assert "amix" not in joined
     assert result["provenance"]["audio_tracks"] == 1
+
+
+def test_hard_cut_mode_uses_concat_and_keeps_the_mix(monkeypatch, tmp_path):
+    """transition_s=0 joins with the concat demuxer; the two-track mix is unchanged."""
+    _, timeline = _edit_plan()
+    captured = _install_fake_ffmpeg(monkeypatch)
+    voice = tmp_path / "voice.wav"
+    voice.write_bytes(b"\x00")
+    music = tmp_path / "music.wav"
+    music.write_bytes(b"\x00")
+    out = tmp_path / "cut.mp4"
+
+    result = ffmpeg.render(
+        timeline, str(out), audio_path=str(voice), music_path=str(music), transition_s=0
+    )
+
+    joined = " ".join(_concat_cmd(captured))
+    assert "concat.txt" in joined and "xfade" not in joined
+    assert "amix" in joined and f"volume={DEFAULT_VOICE_DB}dB" in joined
+    assert result["provenance"]["motion"]["transition"] == {"type": "cut"}
+
+
+def test_xfade_mode_maps_audio_after_the_card_inputs(monkeypatch, tmp_path):
+    """With transitions, audio inputs follow the N card inputs (indices N, N+1)."""
+    _, timeline = _edit_plan()
+    captured = _install_fake_ffmpeg(monkeypatch)
+    voice = tmp_path / "voice.wav"
+    voice.write_bytes(b"\x00")
+    out = tmp_path / "x.mp4"
+
+    result = ffmpeg.render(timeline, str(out), audio_path=str(voice))
+
+    cmd = _concat_cmd(captured)
+    n_cards = result["provenance"]["scene_count"]
+    assert cmd.count("-i") == n_cards + 1
+    maps = [cmd[i + 1] for i, tok in enumerate(cmd) if tok == "-map"]
+    assert maps == ["[v]", f"{n_cards}:a"]

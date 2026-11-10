@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 
 import pytest
 
 from asur.cli import main
+from asur.core.binaries import ffmpeg_bin, ffmpeg_path, ffprobe_path
 from asur.core.workspace import Workspace
 
 IDEA = "why most people waste money on AI tools"
 TAKEAWAY = "list every AI subscription you pay for and cancel the ones that use the same model"
-HAS_FFMPEG = shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+HAS_FFMPEG = ffmpeg_path() is not None and ffprobe_path() is not None
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +54,7 @@ def test_viral_check_missing_file_fails_closed(tmp_path, capsys):
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg/ffprobe not on PATH")
 def test_viral_check_on_a_real_file_saves_an_artifact(tmp_path, capsys):
     clip = tmp_path / "landscape.mp4"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+    subprocess.run([ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
                     "testsrc2=s=640x360:r=30:d=2", "-pix_fmt", "yuv420p", str(clip)], check=True)
     assert main(["viral-check", str(clip), "--project", str(tmp_path)]) == 1
     out = capsys.readouterr().out

@@ -7,14 +7,14 @@ actual ffmpeg parsers (skipped when ffmpeg is not on PATH).
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 
 import pytest
 
+from asur.core.binaries import ffmpeg_bin, ffmpeg_path
 from asur.generation.adapters import ffmpeg
 
-HAS_FFMPEG = shutil.which("ffmpeg") is not None
+HAS_FFMPEG = ffmpeg_path() is not None
 needs_ffmpeg = pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg binary not on PATH")
 
 NASTY = "it's 100%: a\\b, [x]; done"
@@ -24,7 +24,7 @@ def _has_filter(name: str) -> bool:
     if not HAS_FFMPEG:
         return False
     out = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True, check=False
+        [ffmpeg_bin(), "-hide_banner", "-filters"], capture_output=True, text=True, check=False
     ).stdout
     return re.search(rf"^\s*\S+\s+{re.escape(name)}\s", out, re.MULTILINE) is not None
 
@@ -68,12 +68,12 @@ def test_escaped_path_round_trips_through_real_filtergraph_parser(tmp_path):
     weird_dir.mkdir()
     clip = weird_dir / "a:b's,c\\d.mp4"
     subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+        [ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
          "testsrc=s=64x64:d=0.3", str(clip)],
         check=True, capture_output=True,
     )
     proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-f", "lavfi", "-i",
+        [ffmpeg_bin(), "-hide_banner", "-f", "lavfi", "-i",
          f"movie={ffmpeg._escape_option_value(str(clip))}", "-f", "null", "-"],
         capture_output=True, text=True, check=False,
     )
@@ -88,7 +88,7 @@ def test_concat_handles_card_paths_containing_apostrophes(tmp_path):
     for i in range(2):
         card = work / f"it's card {i}.mp4"
         subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+            [ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
              "color=c=red:s=64x64:r=30:d=0.5", "-pix_fmt", "yuv420p", str(card)],
             check=True, capture_output=True,
         )
@@ -98,9 +98,28 @@ def test_concat_handles_card_paths_containing_apostrophes(tmp_path):
     assert out.is_file() and out.stat().st_size > 0
 
 
+def _last_frame_gray(path) -> bytes:
+    return subprocess.run(
+        [ffmpeg_bin(), "-v", "error", "-sseof", "-0.1", "-i", str(path), "-frames:v", "1",
+         "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+        capture_output=True, check=True,
+    ).stdout
+
+
 @pytest.mark.skipif(not _has_filter("drawtext"), reason="ffmpeg build lacks drawtext")
 def test_real_drawtext_renders_nasty_caption(tmp_path):
+    skipped: list[int] = []
+    with_text = tmp_path / "with"
+    without = tmp_path / "without"
+    with_text.mkdir()
+    without.mkdir()
     card = ffmpeg._render_card(
-        0, 1.0, tmp_path, width=180, height=320, fps=30, caption=NASTY, skipped=[]
+        0, 1.0, with_text, width=180, height=320, fps=30, caption=NASTY, skipped=skipped
     )
-    assert card.is_file()
+    clean = ffmpeg._render_card(0, 1.0, without, width=180, height=320, fps=30)
+    assert card.is_file() and skipped == []
+    # the caption is really on screen: after the reveal the frames differ
+    a, b = _last_frame_gray(card), _last_frame_gray(clean)
+    assert len(a) == len(b) == 180 * 320
+    changed = sum(1 for x, y in zip(a, b) if abs(x - y) > 40)
+    assert changed > 0.01 * len(a)
